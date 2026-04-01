@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { PERSONA_LIBRARY, Persona } from "../data/personas";
+import { PERSONA_LIBRARY, ARCHETYPE_DISCLAIMER, Persona } from "../data/personas";
 import { MiiAvatar } from "./MiiAvatar";
 import { getRecentSessions, SessionRecord } from "../data/sessionHistory";
 
@@ -135,6 +135,13 @@ export function PersonaSelector({ onStartSession, onViewSession }: PersonaSelect
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-medium text-white/60 uppercase tracking-wider">Select Your Audience</h2>
+          </div>
+
+          <div className="mb-6 px-4 py-3 rounded-lg border border-white/10 bg-white/[0.02] text-xs text-white/50 leading-relaxed">
+            {ARCHETYPE_DISCLAIMER}
+          </div>
+
+          <div className="flex items-center justify-end mb-4">
             <button onClick={selectAll} className="text-xs text-blue-400 hover:text-blue-300">
               {selected.size === PERSONA_LIBRARY.length ? "Deselect All" : "Select All"}
             </button>
@@ -160,12 +167,13 @@ export function PersonaSelector({ onStartSession, onViewSession }: PersonaSelect
                       <MiiAvatar persona={persona} size={80} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-0.5">
                         <span className="font-medium text-sm">{persona.name}</span>
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/50">
                           {persona.age}
                         </span>
                       </div>
+                      <div className="text-[10px] text-white/30 italic mb-1">{persona.archetype}</div>
                       <div className="flex flex-wrap gap-1.5 mb-2">
                         <Tag color="blue">{persona.profession}</Tag>
                         <Tag color="green">{persona.politicalLeaning}</Tag>

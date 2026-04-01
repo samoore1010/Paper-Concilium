@@ -15,6 +15,9 @@ export interface Persona {
   politicalLeaning: PoliticalLeaning;
   communicationStyle: CommunicationStyle;
   bio: string;
+  archetype: string;
+  archetypeSource: string;
+  disclaimer: string;
   priorities: string[];
   pet_peeves: string[];
   skinTone: string;
@@ -23,6 +26,8 @@ export interface Persona {
   accessory?: "glasses" | "hat" | "earrings" | "bowtie" | "headscarf";
   shirtColor: string;
 }
+
+export const ARCHETYPE_DISCLAIMER = "Characters are original archetypes inspired by public communication styles. They are not impersonations of any real individual.";
 
 export const PERSONA_LIBRARY: Persona[] = [
   {
@@ -36,6 +41,9 @@ export const PERSONA_LIBRARY: Persona[] = [
     politicalLeaning: "progressive",
     communicationStyle: "analytical",
     bio: "Senior product manager at a Bay Area startup. Data-driven decision maker who values clear metrics and scalable thinking.",
+    archetype: "The Metrics-Driven Strategist",
+    archetypeSource: "product management frameworks and startup evaluation methodologies",
+    disclaimer: "An original character embodying analytical, data-driven evaluation patterns common in tech product management.",
     priorities: ["data-backed claims", "scalability", "user impact", "innovation"],
     pet_peeves: ["vague claims", "no metrics", "buzzword overload"],
     skinTone: "#f0c08a",
@@ -55,6 +63,9 @@ export const PERSONA_LIBRARY: Persona[] = [
     politicalLeaning: "conservative",
     communicationStyle: "skeptical",
     bio: "Retired CFO with 30 years on Wall Street. Believes in proven fundamentals and is wary of hype cycles.",
+    archetype: "The Fiscal Skeptic",
+    archetypeSource: "corporate finance evaluation practices and investor due diligence patterns",
+    disclaimer: "An original character embodying the rigorous financial scrutiny common among seasoned corporate finance professionals.",
     priorities: ["ROI", "risk management", "profitability", "proven track record"],
     pet_peeves: ["unrealistic projections", "ignoring risks", "dismissing tradition"],
     skinTone: "#f5d0b0",
@@ -74,6 +85,9 @@ export const PERSONA_LIBRARY: Persona[] = [
     politicalLeaning: "moderate",
     communicationStyle: "blunt",
     bio: "Partner at a mid-size law firm specializing in corporate litigation. Values precision, logical structure, and strong evidence.",
+    archetype: "The Textualist Interrogator",
+    archetypeSource: "litigation cross-examination techniques and legal argumentation standards",
+    disclaimer: "An original character embodying the rigorous logical scrutiny and blunt directness found in experienced trial attorneys.",
     priorities: ["logical structure", "evidence quality", "credibility", "precedent"],
     pet_peeves: ["emotional manipulation", "weak evidence", "circular reasoning"],
     skinTone: "#8d5524",
@@ -93,6 +107,9 @@ export const PERSONA_LIBRARY: Persona[] = [
     politicalLeaning: "progressive",
     communicationStyle: "emotional",
     bio: "High school teacher and community organizer. Passionate about equity, accessibility, and real-world impact on everyday people.",
+    archetype: "The Empathetic Questioner",
+    archetypeSource: "community organizing principles and equity-centered evaluation frameworks",
+    disclaimer: "An original character embodying the community-impact focus and passionate advocacy common in grassroots education and organizing.",
     priorities: ["social impact", "accessibility", "community benefit", "authenticity"],
     pet_peeves: ["elitism", "ignoring underserved communities", "corporate jargon"],
     skinTone: "#c68642",
@@ -111,6 +128,9 @@ export const PERSONA_LIBRARY: Persona[] = [
     politicalLeaning: "moderate",
     communicationStyle: "supportive",
     bio: "Semi-retired nurse practitioner who ran community health clinics. Values empathy, practical solutions, and honest communication.",
+    archetype: "The Practical Mentor",
+    archetypeSource: "community healthcare communication patterns and patient-centered evaluation",
+    disclaimer: "An original character embodying the supportive yet practical communication style found in experienced healthcare professionals.",
     priorities: ["practical impact", "honesty", "empathy", "feasibility"],
     pet_peeves: ["over-promising", "dismissing concerns", "lack of empathy"],
     skinTone: "#fde7d2",
@@ -129,6 +149,9 @@ export const PERSONA_LIBRARY: Persona[] = [
     politicalLeaning: "conservative",
     communicationStyle: "blunt",
     bio: "Owns a successful HVAC business with 20 employees. Self-made, values hard work, practical skills, and fiscal responsibility.",
+    archetype: "The Bootstrap Pragmatist",
+    archetypeSource: "small business ownership principles and self-made entrepreneur evaluation patterns",
+    disclaimer: "An original character embodying the no-nonsense, ROI-focused mindset common among self-made small business owners.",
     priorities: ["cost-effectiveness", "practical utility", "common sense", "self-reliance"],
     pet_peeves: ["academic jargon", "impractical ideas", "government overreach"],
     skinTone: "#b07830",
