@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { PERSONA_LIBRARY, ARCHETYPE_DISCLAIMER, Persona } from "../data/personas";
+import { PERSONA_LIBRARY, PERSONA_PACKS, ARCHETYPE_DISCLAIMER, Persona, PersonaPack } from "../data/personas";
 import { MiiAvatar } from "./MiiAvatar";
 import { getRecentSessions, SessionRecord } from "../data/sessionHistory";
 
@@ -18,6 +18,7 @@ const SESSION_TYPES = [
 export function PersonaSelector({ onStartSession, onViewSession }: PersonaSelectorProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sessionType, setSessionType] = useState("business-pitch");
+  const [activePack, setActivePack] = useState<PersonaPack>("general");
   const [recentSessions, setRecentSessions] = useState<SessionRecord[]>([]);
   const [staggerIndex, setStaggerIndex] = useState(-1);
 
@@ -25,19 +26,28 @@ export function PersonaSelector({ onStartSession, onViewSession }: PersonaSelect
     setRecentSessions(getRecentSessions(3));
   }, []);
 
+  const filteredPersonas = PERSONA_LIBRARY.filter((p) => p.pack === activePack);
+
   useEffect(() => {
-    const indices = Array.from({ length: PERSONA_LIBRARY.length }, (_, i) => i);
+    setStaggerIndex(-1);
     let current = -1;
     const interval = setInterval(() => {
       current++;
-      if (current < indices.length) {
+      if (current < filteredPersonas.length) {
         setStaggerIndex(current);
       } else {
         clearInterval(interval);
       }
     }, 50);
     return () => clearInterval(interval);
-  }, []);
+  }, [activePack, filteredPersonas.length]);
+
+  const handlePackChange = (pack: PersonaPack) => {
+    setActivePack(pack);
+    setSelected(new Set());
+    const packInfo = PERSONA_PACKS.find((p) => p.id === pack);
+    if (packInfo) setSessionType(packInfo.sessionType);
+  };
 
   const togglePersona = (id: string) => {
     setSelected((prev) => {
@@ -49,13 +59,16 @@ export function PersonaSelector({ onStartSession, onViewSession }: PersonaSelect
   };
 
   const selectAll = () => {
-    if (selected.size === PERSONA_LIBRARY.length) {
+    const packIds = filteredPersonas.map((p) => p.id);
+    const allSelected = packIds.every((id) => selected.has(id));
+    if (allSelected) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(PERSONA_LIBRARY.map((p) => p.id)));
+      setSelected(new Set(packIds));
     }
   };
 
+  const allPackSelected = filteredPersonas.length > 0 && filteredPersonas.every((p) => selected.has(p.id));
   const selectedPersonas = PERSONA_LIBRARY.filter((p) => selected.has(p.id));
 
   return (
@@ -131,24 +144,47 @@ export function PersonaSelector({ onStartSession, onViewSession }: PersonaSelect
           </div>
         </section>
 
-        {/* Audience Selection */}
+        {/* Audience Pack Selection */}
         <section>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-medium text-white/60 uppercase tracking-wider">Select Your Audience</h2>
+            <h2 className="text-sm font-medium text-white/60 uppercase tracking-wider">Choose Your Audience</h2>
+          </div>
+
+          {/* Pack Tabs */}
+          <div className="flex gap-3 mb-6 overflow-x-auto pb-1">
+            {PERSONA_PACKS.map((pack) => (
+              <button
+                key={pack.id}
+                onClick={() => handlePackChange(pack.id)}
+                className={`flex-shrink-0 text-left p-4 rounded-lg border transition-all min-w-[200px] ${
+                  activePack === pack.id
+                    ? "border-blue-400 bg-blue-500/10"
+                    : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-lg">{pack.icon}</span>
+                  <span className="font-medium text-sm">{pack.name}</span>
+                </div>
+                <div className="text-[10px] text-white/40 uppercase tracking-wider mb-1">{pack.subtitle}</div>
+                <div className="text-xs text-white/40 leading-relaxed line-clamp-2">{pack.description}</div>
+              </button>
+            ))}
           </div>
 
           <div className="mb-6 px-4 py-3 rounded-lg border border-white/10 bg-white/[0.02] text-xs text-white/50 leading-relaxed">
             {ARCHETYPE_DISCLAIMER}
           </div>
 
-          <div className="flex items-center justify-end mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-xs text-white/40">{filteredPersonas.length} characters in this pack</span>
             <button onClick={selectAll} className="text-xs text-blue-400 hover:text-blue-300">
-              {selected.size === PERSONA_LIBRARY.length ? "Deselect All" : "Select All"}
+              {allPackSelected ? "Deselect All" : "Select All"}
             </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {PERSONA_LIBRARY.map((persona, idx) => {
+            {filteredPersonas.map((persona, idx) => {
               const isSelected = selected.has(persona.id);
               const isAnimating = idx <= staggerIndex;
               return (
