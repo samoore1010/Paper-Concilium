@@ -353,9 +353,10 @@ app.post("/api/react", async (req, res) => {
   const { personaId, userText, sessionType, messageHistory } = req.body;
   if (!personaId || !userText) return res.status(400).json({ error: "personaId and userText required" });
 
+  const effectiveSessionType = sessionType || "business-pitch";
   try {
-    const persona = getPersonaPrompt(personaId);
-    const prompt = buildReactionPrompt(persona, userText, sessionType || "business-pitch", messageHistory || []);
+    const persona = getPersonaPrompt(personaId, effectiveSessionType);
+    const prompt = buildReactionPrompt(persona, userText, effectiveSessionType, messageHistory || []);
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001", max_tokens: 300,
       system: persona.systemPrompt, messages: [{ role: "user", content: prompt }],
@@ -377,11 +378,12 @@ app.post("/api/react-batch", async (req, res) => {
   const { personaIds, userText, sessionType, messageHistory } = req.body;
   if (!personaIds?.length || !userText) return res.status(400).json({ error: "personaIds and userText required" });
 
+  const effectiveSessionType = sessionType || "business-pitch";
   try {
     const results = await Promise.allSettled(
       personaIds.map(async (personaId: string) => {
-        const persona = getPersonaPrompt(personaId);
-        const prompt = buildReactionPrompt(persona, userText, sessionType || "business-pitch", messageHistory || []);
+        const persona = getPersonaPrompt(personaId, effectiveSessionType);
+        const prompt = buildReactionPrompt(persona, userText, effectiveSessionType, messageHistory || []);
         const message = await client.messages.create({
           model: "claude-haiku-4-5-20251001", max_tokens: 300,
           system: persona.systemPrompt, messages: [{ role: "user", content: prompt }],
@@ -411,9 +413,10 @@ app.post("/api/feedback", async (req, res) => {
   const { personaId, transcript, sessionType } = req.body;
   if (!personaId || !transcript) return res.status(400).json({ error: "personaId and transcript required" });
 
+  const effectiveSessionType = sessionType || "business-pitch";
   try {
-    const persona = getPersonaPrompt(personaId);
-    const prompt = buildFeedbackPrompt(persona, transcript, sessionType || "business-pitch");
+    const persona = getPersonaPrompt(personaId, effectiveSessionType);
+    const prompt = buildFeedbackPrompt(persona, transcript, effectiveSessionType);
     console.log(`[Feedback] Generating for ${personaId}...`);
 
     const message = await client.messages.create({
@@ -441,12 +444,13 @@ app.post("/api/feedback-batch", async (req, res) => {
   const { personaIds, transcript, sessionType } = req.body;
   if (!personaIds?.length || !transcript) return res.status(400).json({ error: "personaIds and transcript required" });
 
+  const effectiveSessionType = sessionType || "business-pitch";
   try {
     const feedback: any[] = [];
     for (const personaId of personaIds) {
       try {
-        const persona = getPersonaPrompt(personaId);
-        const prompt = buildFeedbackPrompt(persona, transcript, sessionType || "business-pitch");
+        const persona = getPersonaPrompt(personaId, effectiveSessionType);
+        const prompt = buildFeedbackPrompt(persona, transcript, effectiveSessionType);
         const message = await client.messages.create({
           model: "claude-sonnet-4-6", max_tokens: 1500,
           system: persona.systemPrompt, messages: [{ role: "user", content: prompt }],
