@@ -5,7 +5,6 @@ import {
   MasteryTier,
   MASTERY_COLORS,
   MASTERY_LABELS,
-  MASTERY_ORDER,
   getUnlockRequirement,
   getCharacterStats,
   getDossier,

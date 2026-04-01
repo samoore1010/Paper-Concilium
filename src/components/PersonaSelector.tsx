@@ -2,10 +2,20 @@ import { useState, useEffect } from "react";
 import { PERSONA_LIBRARY, PERSONA_PACKS, ARCHETYPE_DISCLAIMER, Persona, PersonaPack } from "../data/personas";
 import { MiiAvatar } from "./MiiAvatar";
 import { getRecentSessions, SessionRecord } from "../data/sessionHistory";
+import {
+  CollectionProgress,
+  getUnlockRequirement,
+  getCharacterStats,
+  MASTERY_COLORS,
+  MASTERY_LABELS,
+  MasteryTier,
+} from "../data/characterCollection";
 
 interface PersonaSelectorProps {
   onStartSession: (personas: Persona[], sessionType: string) => void;
   onViewSession?: (session: SessionRecord) => void;
+  collection: CollectionProgress;
+  onViewCollection?: () => void;
 }
 
 const SESSION_TYPES = [
@@ -15,7 +25,7 @@ const SESSION_TYPES = [
   { id: "sales-demo", label: "Sales Demo", desc: "Rehearse a product demo for prospective clients" },
 ];
 
-export function PersonaSelector({ onStartSession, onViewSession }: PersonaSelectorProps) {
+export function PersonaSelector({ onStartSession, onViewSession, collection, onViewCollection }: PersonaSelectorProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sessionType, setSessionType] = useState("business-pitch");
   const [activePack, setActivePack] = useState<PersonaPack>("general");
@@ -49,7 +59,10 @@ export function PersonaSelector({ onStartSession, onViewSession }: PersonaSelect
     if (packInfo) setSessionType(packInfo.sessionType);
   };
 
+  const isUnlocked = (id: string) => collection.unlockedCharacters.includes(id);
+
   const togglePersona = (id: string) => {
+    if (!isUnlocked(id)) return;
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -58,17 +71,19 @@ export function PersonaSelector({ onStartSession, onViewSession }: PersonaSelect
     });
   };
 
+  const unlockedInPack = filteredPersonas.filter((p) => isUnlocked(p.id));
+
   const selectAll = () => {
-    const packIds = filteredPersonas.map((p) => p.id);
-    const allSelected = packIds.every((id) => selected.has(id));
+    const unlockedIds = unlockedInPack.map((p) => p.id);
+    const allSelected = unlockedIds.every((id) => selected.has(id));
     if (allSelected) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(packIds));
+      setSelected(new Set(unlockedIds));
     }
   };
 
-  const allPackSelected = filteredPersonas.length > 0 && filteredPersonas.every((p) => selected.has(p.id));
+  const allPackSelected = unlockedInPack.length > 0 && unlockedInPack.every((p) => selected.has(p.id));
   const selectedPersonas = PERSONA_LIBRARY.filter((p) => selected.has(p.id));
 
   return (
@@ -83,13 +98,23 @@ export function PersonaSelector({ onStartSession, onViewSession }: PersonaSelect
               <p className="text-xs text-white/40">AI Audience Simulator</p>
             </div>
           </div>
-          <button
-            onClick={() => onStartSession(selectedPersonas, sessionType)}
-            disabled={selected.size === 0}
-            className="px-5 py-2.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
-          >
-            Start Session ({selected.size})
-          </button>
+          <div className="flex items-center gap-3">
+            {onViewCollection && (
+              <button
+                onClick={onViewCollection}
+                className="px-4 py-2.5 border border-white/10 hover:bg-white/[0.04] rounded-lg text-sm font-medium transition-colors text-white/60"
+              >
+                Collection
+              </button>
+            )}
+            <button
+              onClick={() => onStartSession(selectedPersonas, sessionType)}
+              disabled={selected.size === 0}
+              className="px-5 py-2.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
+            >
+              Start Session ({selected.size})
+            </button>
+          </div>
         </div>
       </header>
 
@@ -185,8 +210,38 @@ export function PersonaSelector({ onStartSession, onViewSession }: PersonaSelect
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredPersonas.map((persona, idx) => {
+              const unlocked = isUnlocked(persona.id);
               const isSelected = selected.has(persona.id);
               const isAnimating = idx <= staggerIndex;
+              const stats = getCharacterStats(collection, persona.id);
+              const req = getUnlockRequirement(persona.id);
+
+              if (!unlocked) {
+                return (
+                  <div
+                    key={persona.id}
+                    className={`relative text-left p-4 rounded-lg border border-white/5 bg-white/[0.01] ${isAnimating ? "animate-stagger-in" : "opacity-0"}`}
+                    style={{ animationDelay: `${idx * 50}ms` }}
+                  >
+                    <div className="flex gap-4">
+                      <div className="flex-shrink-0 opacity-20 grayscale">
+                        <MiiAvatar persona={persona} size={80} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm text-white/20 mb-1">???</div>
+                        <div className="text-[10px] text-white/15 italic mb-2">{persona.archetype}</div>
+                        <div className="flex items-center gap-1.5">
+                          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="text-white/20">
+                            <path d="M8 1a4 4 0 0 0-4 4v3H3a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1h-1V5a4 4 0 0 0-4-4z" fill="currentColor" />
+                          </svg>
+                          <span className="text-[10px] text-white/20">{req.description}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
               return (
                 <button
                   key={persona.id}
@@ -208,6 +263,9 @@ export function PersonaSelector({ onStartSession, onViewSession }: PersonaSelect
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/50">
                           {persona.age}
                         </span>
+                        {stats && stats.masteryTier !== "none" && (
+                          <MasteryBadge tier={stats.masteryTier} />
+                        )}
                       </div>
                       <div className="text-[10px] text-white/30 italic mb-1">{persona.archetype}</div>
                       <div className="flex flex-wrap gap-1.5 mb-2">
@@ -235,6 +293,20 @@ export function PersonaSelector({ onStartSession, onViewSession }: PersonaSelect
         </section>
       </div>
     </div>
+  );
+}
+
+function MasteryBadge({ tier }: { tier: MasteryTier }) {
+  return (
+    <span
+      className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+      style={{
+        backgroundColor: `${MASTERY_COLORS[tier]}20`,
+        color: MASTERY_COLORS[tier],
+      }}
+    >
+      {MASTERY_LABELS[tier]}
+    </span>
   );
 }
 

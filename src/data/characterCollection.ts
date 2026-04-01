@@ -229,14 +229,14 @@ export function loadCollection(): CollectionProgress {
       }
       return parsed;
     }
-  } catch {}
+  } catch { /* localStorage unavailable */ }
   return getDefaultCollection();
 }
 
 export function saveCollection(collection: CollectionProgress): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(collection));
-  } catch {}
+  } catch { /* localStorage unavailable */ }
 }
 
 // ============================================================
