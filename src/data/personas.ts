@@ -42,6 +42,12 @@ export const PERSONA_PACKS: PersonaPackInfo[] = [
   },
 ];
 
+export interface PersonaStats {
+  toughness: number;    // 1-10: How hard they push back
+  domainDepth: number;  // 1-10: Expertise level in their domain
+  patience: number;     // 1-10: How much they'll let you finish before interrupting
+}
+
 export interface Persona {
   id: string;
   name: string;
@@ -59,11 +65,15 @@ export interface Persona {
   priorities: string[];
   pet_peeves: string[];
   pack: PersonaPack;
+  stats: PersonaStats;
+  catchphrase: string;
   skinTone: string;
   hairColor: string;
   hairStyle: "short" | "long" | "bald" | "curly" | "ponytail" | "bob";
   accessory?: "glasses" | "hat" | "earrings" | "bowtie" | "headscarf";
   shirtColor: string;
+  locked?: boolean;
+  unlockRequirement?: string;
 }
 
 export const ARCHETYPE_DISCLAIMER = "Characters are original archetypes inspired by public communication styles. They are not impersonations of any real individual.";
@@ -86,6 +96,8 @@ export const PERSONA_LIBRARY: Persona[] = [
     priorities: ["data-backed claims", "scalability", "user impact", "innovation"],
     pet_peeves: ["vague claims", "no metrics", "buzzword overload"],
     pack: "general",
+    stats: { toughness: 7, domainDepth: 8, patience: 6 },
+    catchphrase: "Show me the data.",
     skinTone: "#f0c08a",
     hairColor: "#1a1a2e",
     hairStyle: "long",
@@ -109,6 +121,8 @@ export const PERSONA_LIBRARY: Persona[] = [
     priorities: ["ROI", "risk management", "profitability", "proven track record"],
     pet_peeves: ["unrealistic projections", "ignoring risks", "dismissing tradition"],
     pack: "general",
+    stats: { toughness: 9, domainDepth: 9, patience: 4 },
+    catchphrase: "What's the bottom line?",
     skinTone: "#f5d0b0",
     hairColor: "#a0a0a0",
     hairStyle: "short",
@@ -132,6 +146,8 @@ export const PERSONA_LIBRARY: Persona[] = [
     priorities: ["logical structure", "evidence quality", "credibility", "precedent"],
     pet_peeves: ["emotional manipulation", "weak evidence", "circular reasoning"],
     pack: "general",
+    stats: { toughness: 8, domainDepth: 8, patience: 5 },
+    catchphrase: "Objection — where's your evidence?",
     skinTone: "#8d5524",
     hairColor: "#1a1a1a",
     hairStyle: "curly",
@@ -155,6 +171,8 @@ export const PERSONA_LIBRARY: Persona[] = [
     priorities: ["social impact", "accessibility", "community benefit", "authenticity"],
     pet_peeves: ["elitism", "ignoring underserved communities", "corporate jargon"],
     pack: "general",
+    stats: { toughness: 5, domainDepth: 6, patience: 8 },
+    catchphrase: "But what about the people?",
     skinTone: "#c68642",
     hairColor: "#2d1b00",
     hairStyle: "short",
@@ -177,6 +195,8 @@ export const PERSONA_LIBRARY: Persona[] = [
     priorities: ["practical impact", "honesty", "empathy", "feasibility"],
     pet_peeves: ["over-promising", "dismissing concerns", "lack of empathy"],
     pack: "general",
+    stats: { toughness: 3, domainDepth: 7, patience: 9 },
+    catchphrase: "Tell me more, I'm listening.",
     skinTone: "#fde7d2",
     hairColor: "#c4a882",
     hairStyle: "bob",
@@ -199,6 +219,8 @@ export const PERSONA_LIBRARY: Persona[] = [
     priorities: ["cost-effectiveness", "practical utility", "common sense", "self-reliance"],
     pet_peeves: ["academic jargon", "impractical ideas", "government overreach"],
     pack: "general",
+    stats: { toughness: 8, domainDepth: 6, patience: 4 },
+    catchphrase: "Sounds great. How much does it cost?",
     skinTone: "#b07830",
     hairColor: "#1a1a1a",
     hairStyle: "short",
@@ -226,6 +248,8 @@ export const PERSONA_LIBRARY: Persona[] = [
     priorities: ["institutional legitimacy", "narrow rulings", "consensus", "judicial restraint"],
     pet_peeves: ["sweeping arguments", "disrespect for precedent", "political grandstanding"],
     pack: "legal-bench",
+    stats: { toughness: 7, domainDepth: 10, patience: 6 },
+    catchphrase: "Counsel, are you asking us to go that far?",
     skinTone: "#f5d0b0",
     hairColor: "#a0a0a0",
     hairStyle: "short",
@@ -249,6 +273,8 @@ export const PERSONA_LIBRARY: Persona[] = [
     priorities: ["original public meaning", "constitutional text", "limited government", "structural federalism"],
     pet_peeves: ["living constitutionalism", "policy arguments masquerading as law", "stare decisis for its own sake"],
     pack: "legal-bench",
+    stats: { toughness: 10, domainDepth: 10, patience: 8 },
+    catchphrase: "What did the text mean when it was ratified?",
     skinTone: "#8d5524",
     hairColor: "#a0a0a0",
     hairStyle: "short",
@@ -271,6 +297,8 @@ export const PERSONA_LIBRARY: Persona[] = [
     priorities: ["factual accuracy", "practical consequences", "government authority", "law enforcement perspective"],
     pet_peeves: ["evasive answers", "ignoring the factual record", "abstract theorizing detached from facts"],
     pack: "legal-bench",
+    stats: { toughness: 10, domainDepth: 8, patience: 2 },
+    catchphrase: "Counsel, that's not what the record shows.",
     skinTone: "#f5d0b0",
     hairColor: "#a0a0a0",
     hairStyle: "short",
@@ -294,6 +322,8 @@ export const PERSONA_LIBRARY: Persona[] = [
     priorities: ["real-world impact", "access to justice", "individual rights", "equity"],
     pet_peeves: ["abstract doctrine divorced from reality", "ignoring disparate impact", "corporate interests over individuals"],
     pack: "legal-bench",
+    stats: { toughness: 7, domainDepth: 9, patience: 7 },
+    catchphrase: "What happens to real people when we rule this way?",
     skinTone: "#c68642",
     hairColor: "#1a1a1a",
     hairStyle: "curly",
@@ -317,6 +347,8 @@ export const PERSONA_LIBRARY: Persona[] = [
     priorities: ["workable legal rules", "logical consistency", "hypothetical testing", "clear standards"],
     pet_peeves: ["unworkable rules", "slippery slope avoidance", "refusing to engage with hypotheticals"],
     pack: "legal-bench",
+    stats: { toughness: 9, domainDepth: 10, patience: 5 },
+    catchphrase: "Let me give you a hypothetical...",
     skinTone: "#fde7d2",
     hairColor: "#c4a882",
     hairStyle: "bob",
@@ -340,6 +372,8 @@ export const PERSONA_LIBRARY: Persona[] = [
     priorities: ["plain text meaning", "separation of powers", "limiting agency power", "individual liberty"],
     pet_peeves: ["legislative history", "Chevron deference", "purposivism", "vague statutory language"],
     pack: "legal-bench",
+    stats: { toughness: 8, domainDepth: 9, patience: 5 },
+    catchphrase: "What does the statute actually say?",
     skinTone: "#f5d0b0",
     hairColor: "#4a3728",
     hairStyle: "short",
@@ -362,6 +396,8 @@ export const PERSONA_LIBRARY: Persona[] = [
     priorities: ["stare decisis", "reliance interests", "incremental development", "case law consistency"],
     pet_peeves: ["ignoring controlling precedent", "asking the court to overturn settled law", "unfamiliarity with relevant case history"],
     pack: "legal-bench",
+    stats: { toughness: 6, domainDepth: 9, patience: 7 },
+    catchphrase: "How do you distinguish this from the prior case?",
     skinTone: "#f5d0b0",
     hairColor: "#4a3728",
     hairStyle: "short",
@@ -384,6 +420,8 @@ export const PERSONA_LIBRARY: Persona[] = [
     priorities: ["doctrinal precision", "proper standard of review", "systematic analysis", "well-briefed arguments"],
     pet_peeves: ["conflating legal standards", "skipping analytical steps", "emotional appeals substituting for legal analysis"],
     pack: "legal-bench",
+    stats: { toughness: 8, domainDepth: 10, patience: 4 },
+    catchphrase: "What standard of review are you applying?",
     skinTone: "#fde7d2",
     hairColor: "#4a3728",
     hairStyle: "long",
@@ -406,6 +444,8 @@ export const PERSONA_LIBRARY: Persona[] = [
     priorities: ["historical context", "evolving constitutional meaning", "structural equity", "public defender perspective"],
     pet_peeves: ["ahistorical arguments", "colorblind formalism", "ignoring structural inequality"],
     pack: "legal-bench",
+    stats: { toughness: 7, domainDepth: 9, patience: 6 },
+    catchphrase: "What's the history behind this doctrine?",
     skinTone: "#8d5524",
     hairColor: "#1a1a1a",
     hairStyle: "curly",
@@ -433,6 +473,8 @@ export const PERSONA_LIBRARY: Persona[] = [
     priorities: ["royalty deals", "capital-efficient returns", "proven revenue", "licensing opportunities"],
     pet_peeves: ["no clear revenue model", "burning cash for growth", "equity-only asks", "founders who can't do math"],
     pack: "business-tank",
+    stats: { toughness: 9, domainDepth: 8, patience: 3 },
+    catchphrase: "What's my money back timeline?",
     skinTone: "#f5d0b0",
     hairColor: "#a0a0a0",
     hairStyle: "bald",
@@ -456,6 +498,8 @@ export const PERSONA_LIBRARY: Persona[] = [
     priorities: ["massive TAM", "network effects", "scalability", "tech-enabled disruption"],
     pet_peeves: ["small thinking", "lifestyle businesses", "no tech moat", "founders who don't know their market size"],
     pack: "business-tank",
+    stats: { toughness: 8, domainDepth: 9, patience: 4 },
+    catchphrase: "How big can this get?",
     skinTone: "#f0c08a",
     hairColor: "#4a3728",
     hairStyle: "short",
@@ -478,6 +522,8 @@ export const PERSONA_LIBRARY: Persona[] = [
     priorities: ["founder authenticity", "salesmanship", "grit and hustle", "market timing"],
     pet_peeves: ["slick pitches with no substance", "founders who can't sell", "overcomplication", "no skin in the game"],
     pack: "business-tank",
+    stats: { toughness: 7, domainDepth: 7, patience: 6 },
+    catchphrase: "I invest in people, not spreadsheets.",
     skinTone: "#fde7d2",
     hairColor: "#c4a882",
     hairStyle: "bob",
@@ -501,6 +547,8 @@ export const PERSONA_LIBRARY: Persona[] = [
     priorities: ["product-market fit", "consumer appeal", "retail distribution", "packaging and branding"],
     pet_peeves: ["no prototype", "untested with real consumers", "overengineered products", "no distribution plan"],
     pack: "business-tank",
+    stats: { toughness: 5, domainDepth: 9, patience: 7 },
+    catchphrase: "Would I buy this? Would my daughter?",
     skinTone: "#fde7d2",
     hairColor: "#c4a882",
     hairStyle: "long",
@@ -524,6 +572,8 @@ export const PERSONA_LIBRARY: Persona[] = [
     priorities: ["sales pipeline", "go-to-market execution", "team quality", "revenue trajectory"],
     pet_peeves: ["all vision no execution", "no sales strategy", "founders who've never sold anything", "hand-wavy go-to-market"],
     pack: "business-tank",
+    stats: { toughness: 6, domainDepth: 8, patience: 6 },
+    catchphrase: "Walk me through your sales pipeline.",
     skinTone: "#f5d0b0",
     hairColor: "#4a3728",
     hairStyle: "short",
@@ -546,6 +596,8 @@ export const PERSONA_LIBRARY: Persona[] = [
     priorities: ["brand story", "cultural relevance", "marketing strategy", "community building"],
     pet_peeves: ["no brand identity", "generic positioning", "founders who undervalue marketing", "copycat products"],
     pack: "business-tank",
+    stats: { toughness: 7, domainDepth: 8, patience: 5 },
+    catchphrase: "What's the story you're selling?",
     skinTone: "#8d5524",
     hairColor: "#1a1a1a",
     hairStyle: "short",
