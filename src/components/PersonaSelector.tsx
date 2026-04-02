@@ -16,6 +16,7 @@ interface PersonaSelectorProps {
   onViewSession?: (session: SessionRecord) => void;
   collection: CollectionProgress;
   onViewCollection?: () => void;
+  onPractice?: () => void;
 }
 
 const SESSION_TYPES = [
@@ -25,7 +26,7 @@ const SESSION_TYPES = [
   { id: "sales-demo", label: "Sales Demo", desc: "Rehearse a product demo for prospective clients" },
 ];
 
-export function PersonaSelector({ onStartSession, onViewSession, collection, onViewCollection }: PersonaSelectorProps) {
+export function PersonaSelector({ onStartSession, onViewSession, collection, onViewCollection, onPractice }: PersonaSelectorProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sessionType, setSessionType] = useState("business-pitch");
   const [activePack, setActivePack] = useState<PersonaPack>("general");
@@ -99,6 +100,14 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {onPractice && (
+              <button
+                onClick={onPractice}
+                className="px-4 py-2.5 border border-white/10 hover:bg-white/[0.04] rounded-lg text-sm font-medium transition-colors text-white/60"
+              >
+                Practice
+              </button>
+            )}
             {onViewCollection && (
               <button
                 onClick={onViewCollection}
