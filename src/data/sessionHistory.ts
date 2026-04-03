@@ -34,10 +34,33 @@ export interface SessionRecord {
   transcript?: string;
 }
 
-let sessionHistory: SessionRecord[] = [];
+const STORAGE_KEY = "concilium_session_history";
+
+function loadFromStorage(): SessionRecord[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed;
+  } catch {
+    return [];
+  }
+}
+
+function saveToStorage(sessions: SessionRecord[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+  } catch {
+    // localStorage full or unavailable — silently degrade
+  }
+}
+
+let sessionHistory: SessionRecord[] = loadFromStorage();
 
 export function addSession(session: SessionRecord): void {
   sessionHistory.push(session);
+  saveToStorage(sessionHistory);
 }
 
 export function getSessionHistory(): SessionRecord[] {
@@ -54,4 +77,5 @@ export function getSessionById(id: string): SessionRecord | undefined {
 
 export function clearHistory(): void {
   sessionHistory = [];
+  saveToStorage(sessionHistory);
 }

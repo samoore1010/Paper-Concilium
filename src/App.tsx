@@ -11,6 +11,7 @@ import { PracticeDashboard } from "./components/practice/PracticeDashboard";
 import { ExerciseView } from "./components/practice/ExerciseView";
 import { PersonaSelector } from "./components/PersonaSelector";
 import { CollectionDashboard } from "./components/CollectionDashboard";
+import { ProgressDashboard } from "./components/ProgressDashboard";
 import { ScriptSetup, ScriptConfig } from "./components/ScriptSetup";
 import { MeetingRoom, SessionRecordingData } from "./components/MeetingRoom";
 import { FeedbackView } from "./components/FeedbackView";
@@ -23,7 +24,8 @@ type AppView =
   | "meeting"
   | "feedback"
   | "joining"
-  | "collection";
+  | "collection"
+  | "progress";
 
 export default function App() {
   const [view, setView] = useState<AppView>("setup");
@@ -192,7 +194,13 @@ export default function App() {
 
         {view === "feedback" && (
           <motion.div key="feedback" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.5 }}>
-            <FeedbackView feedback={feedback} transcript={transcript} recordingData={recordingData} onNewSession={handleNewSession} onViewSession={handleViewSession} />
+            <FeedbackView feedback={feedback} transcript={transcript} recordingData={recordingData} onNewSession={handleNewSession} onViewSession={handleViewSession} onViewProgress={() => setView("progress")} />
+          </motion.div>
+        )}
+
+        {view === "progress" && (
+          <motion.div key="progress" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
+            <ProgressDashboard onBack={() => setView("setup")} />
           </motion.div>
         )}
 
@@ -204,6 +212,7 @@ export default function App() {
               collection={characterCollection}
               onViewCollection={() => setView("collection")}
               onPractice={() => setView("practice-dashboard")}
+              onProgress={() => setView("progress")}
             />
           </motion.div>
         )}

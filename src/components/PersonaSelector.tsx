@@ -19,6 +19,7 @@ interface PersonaSelectorProps {
   collection: CollectionProgress;
   onViewCollection?: () => void;
   onPractice?: () => void;
+  onProgress?: () => void;
 }
 
 const SESSION_TYPES = [
@@ -35,7 +36,7 @@ const PACK_COLORS: Record<PersonaPack, string> = {
   "business-tank": "#d4a017",
 };
 
-export function PersonaSelector({ onStartSession, onViewSession, collection, onViewCollection, onPractice }: PersonaSelectorProps) {
+export function PersonaSelector({ onStartSession, onViewSession, collection, onViewCollection, onPractice, onProgress }: PersonaSelectorProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sessionType, setSessionType] = useState("business-pitch");
   const [activePack, setActivePack] = useState<PersonaPack>("general");
@@ -107,6 +108,14 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {onProgress && (
+              <button
+                onClick={onProgress}
+                className="px-4 py-2.5 border border-white/5 hover:bg-surface-overlay rounded-lg text-sm font-medium transition-colors text-white/60"
+              >
+                Progress
+              </button>
+            )}
             {onPractice && (
               <button
                 onClick={onPractice}
