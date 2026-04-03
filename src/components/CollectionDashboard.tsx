@@ -30,7 +30,7 @@ export function CollectionDashboard({ collection }: CollectionDashboardProps) {
       : PERSONA_LIBRARY.filter((p) => p.pack === activePack);
 
   return (
-    <div className="px-6 py-8">
+    <div className="px-4 md:px-6 py-6 md:py-8">
         {/* Summary Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-section-sm md:mb-section">
           <StatCard label="Characters" value={`${summary.totalUnlocked}/${summary.totalCharacters}`} sub="unlocked" />

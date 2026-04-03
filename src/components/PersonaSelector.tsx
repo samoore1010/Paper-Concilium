@@ -93,10 +93,10 @@ export function PersonaSelector({ onStartSession, onViewSession, collection }: P
   const selectedPersonas = PERSONA_LIBRARY.filter((p) => selected.has(p.id));
 
   return (
-    <div className="px-6 py-8">
+    <div className="px-4 md:px-6 py-6 md:py-8">
       {/* Start session button — sticky at bottom */}
       {selected.size > 0 && (
-        <div className="fixed bottom-6 right-6 z-30">
+        <div className="fixed bottom-[calc(56px+env(safe-area-inset-bottom,0px)+16px)] md:bottom-6 right-4 md:right-6 z-30">
           <button
             onClick={() => onStartSession(selectedPersonas, sessionType)}
             className="px-5 py-2.5 bg-blue-500 hover:bg-blue-600 rounded-lg text-sm font-medium transition-colors shadow-lg shadow-blue-500/25"
@@ -213,7 +213,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection }: P
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
                   transition={{ duration: 0.25 }}
-                  className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2"
+                  className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2"
                 >
                   {filteredPersonas.map((persona, idx) => {
                     const unlocked = isUnlocked(persona.id);
