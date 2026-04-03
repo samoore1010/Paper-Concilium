@@ -31,9 +31,9 @@ export function CollectionDashboard({ collection, onBack }: CollectionDashboardP
       : PERSONA_LIBRARY.filter((p) => p.pack === activePack);
 
   return (
-    <div className="min-h-screen bg-[#0f0f23] text-white">
+    <div className="min-h-screen bg-surface-base text-white">
       {/* Header */}
-      <header className="border-b border-white/10 px-6 py-4">
+      <header className="border-b border-white/5 px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
@@ -80,7 +80,7 @@ export function CollectionDashboard({ collection, onBack }: CollectionDashboardP
                   className={`text-left p-4 rounded-lg border transition-all ${
                     activePack === pack.id
                       ? "border-blue-400 bg-blue-500/10"
-                      : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"
+                      : "border-white/5 bg-surface-raised hover:bg-surface-overlay"
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-2">
@@ -127,7 +127,7 @@ export function CollectionDashboard({ collection, onBack }: CollectionDashboardP
                   onClick={() => isUnlocked && setSelectedPersona(persona)}
                   className={`relative text-left p-4 rounded-lg border transition-all ${
                     isUnlocked
-                      ? "border-white/10 bg-white/[0.02] hover:bg-white/[0.04] cursor-pointer"
+                      ? "border-white/5 bg-surface-raised hover:bg-surface-overlay cursor-pointer"
                       : "border-white/5 bg-white/[0.01] cursor-default"
                   }`}
                 >
@@ -190,7 +190,7 @@ function StatCard({
   color?: string;
 }) {
   return (
-    <div className="p-4 rounded-lg border border-white/10 bg-white/[0.02]">
+    <div className="p-4 rounded-lg border border-white/5 bg-surface-raised">
       <div className="text-xs text-white/40 mb-1">{label}</div>
       <div className="text-xl font-bold" style={color ? { color } : undefined}>
         {value}
@@ -231,7 +231,7 @@ function CharacterDetailModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
       <div
-        className="bg-[#0f0f23] border border-white/10 rounded-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto p-6"
+        className="bg-surface-base border border-white/5 rounded-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto p-6"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -248,15 +248,15 @@ function CharacterDetailModal({
         {/* Stats */}
         {stats ? (
           <div className="grid grid-cols-3 gap-3 mb-6">
-            <div className="text-center p-3 rounded-lg bg-white/[0.03]">
+            <div className="text-center p-3 rounded-lg bg-surface-raised">
               <div className="text-lg font-bold">{stats.sessionsCompleted}</div>
               <div className="text-[10px] text-white/40">Sessions</div>
             </div>
-            <div className="text-center p-3 rounded-lg bg-white/[0.03]">
+            <div className="text-center p-3 rounded-lg bg-surface-raised">
               <div className="text-lg font-bold">{stats.bestScore.toFixed(1)}</div>
               <div className="text-[10px] text-white/40">Best Score</div>
             </div>
-            <div className="text-center p-3 rounded-lg bg-white/[0.03]">
+            <div className="text-center p-3 rounded-lg bg-surface-raised">
               <div className="text-lg font-bold">
                 {stats.sessionsCompleted > 0 ? (stats.totalScore / stats.sessionsCompleted).toFixed(1) : "—"}
               </div>
@@ -271,7 +271,7 @@ function CharacterDetailModal({
 
         {/* Mastery Progress */}
         {mastery.nextTier && (
-          <div className="mb-6 p-3 rounded-lg border border-white/10 bg-white/[0.02]">
+          <div className="mb-6 p-3 rounded-lg border border-white/5 bg-surface-raised">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs text-white/50">
                 Next: <span style={{ color: MASTERY_COLORS[mastery.nextTier] }}>{MASTERY_LABELS[mastery.nextTier]}</span>
@@ -300,7 +300,7 @@ function CharacterDetailModal({
                   className={`p-3 rounded-lg border ${
                     isLocked
                       ? "border-white/5 bg-white/[0.01]"
-                      : "border-white/10 bg-white/[0.02]"
+                      : "border-white/5 bg-surface-raised"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">

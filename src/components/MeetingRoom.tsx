@@ -827,7 +827,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
         {isEnding && (
           <motion.div
             key="generating-overlay"
-            className="absolute inset-0 z-50 bg-[#0f0f23]/90 backdrop-blur-sm flex items-center justify-center"
+            className="absolute inset-0 z-50 bg-surface-base/90 backdrop-blur-sm flex items-center justify-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -926,7 +926,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
               {(["chat", "coach", "questions"] as SideTab[]).map((tab) => (
                 <button
                   key={tab} onClick={() => setSideTab(tab)}
-                  className={`flex-1 px-2 py-2 text-xs font-medium transition-colors relative ${sideTab === tab ? "text-white bg-white/10" : "text-white/50 hover:text-white/70"}`}
+                  className={`flex-1 px-2 py-2 text-xs font-medium transition-colors relative ${sideTab === tab ? "text-white bg-surface-overlay" : "text-white/50 hover:text-white/70"}`}
                 >
                   {tab === "questions" ? "Q&A" : tab.charAt(0).toUpperCase() + tab.slice(1)}
                   {tab === "questions" && questionQueue.length > 0 && (
@@ -960,7 +960,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
               />
               <motion.div
                 key="sheet"
-                className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0f0f23]/95 backdrop-blur-md border-t border-white/10 rounded-t-2xl flex flex-col"
+                className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface-base/95 backdrop-blur-md border-t border-white/5 rounded-t-2xl flex flex-col"
                 style={{ maxHeight: "40dvh" }}
                 initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
                 transition={{ type: "spring", stiffness: 300, damping: 30 }}
@@ -972,7 +972,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
                   {(["chat", "coach", "questions"] as SideTab[]).map((tab) => (
                     <button
                       key={tab} onClick={() => setMobilePanel(tab)}
-                      className={`flex-1 px-2 py-2 text-xs font-medium relative ${mobilePanel === tab ? "text-white bg-white/10" : "text-white/50"}`}
+                      className={`flex-1 px-2 py-2 text-xs font-medium relative ${mobilePanel === tab ? "text-white bg-surface-overlay" : "text-white/50"}`}
                     >
                       {tab === "questions" ? "Q&A" : tab.charAt(0).toUpperCase() + tab.slice(1)}
                       {tab === "questions" && questionQueue.length > 0 && (
@@ -1026,7 +1026,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
               <ToolbarBtn icon="video" active={isCameraActive} color={theme.accentColor} onClick={() => isCameraActive ? stopCamera() : startCamera()} />
               <button
                 onClick={() => setMobilePanel(mobilePanel ? null : "chat")}
-                className="md:hidden w-10 h-10 flex items-center justify-center rounded-full bg-white/5 text-white/50 relative flex-shrink-0"
+                className="md:hidden w-10 h-10 flex items-center justify-center rounded-full bg-surface-raised text-white/50 relative flex-shrink-0"
               >
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                   <path d="M2.5 2A1.5 1.5 0 001 3.5v8A1.5 1.5 0 002.5 13H4l4 3v-3h4.5a1.5 1.5 0 001.5-1.5v-8A1.5 1.5 0 0012.5 2h-10z" />
@@ -1042,7 +1042,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
                     placeholder="Type here..."
-                    className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-blue-400/50"
+                    className="flex-1 min-w-0 bg-surface-raised border border-white/5 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-blue-400/50"
                   />
                   <button
                     onClick={handleSendMessage} disabled={!inputText.trim()}
@@ -1150,7 +1150,7 @@ function ToolbarBtn({ icon, active, color, onClick }: { icon: string; active?: b
   return (
     <button
       onClick={onClick}
-      className={`w-10 h-10 md:w-9 md:h-9 flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${active ? "text-white" : "bg-white/5 hover:bg-white/10 text-white/50"}`}
+      className={`w-10 h-10 md:w-9 md:h-9 flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${active ? "text-white" : "bg-surface-raised hover:bg-surface-overlay text-white/50"}`}
       style={active ? { backgroundColor: color } : undefined}
     >
       <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d={paths[icon]} /></svg>

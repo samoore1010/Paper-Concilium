@@ -12,9 +12,9 @@ export function PracticeDashboard({ progress, onSelectLesson, onBack }: Practice
   const levelInfo = getLevelProgress(progress);
 
   return (
-    <div className="min-h-[100dvh] bg-[#0f0f23] text-white">
+    <div className="min-h-[100dvh] bg-surface-base text-white">
       {/* Header */}
-      <header className="border-b border-white/10 px-4 md:px-6 py-3 md:py-4">
+      <header className="border-b border-white/5 px-4 md:px-6 py-3 md:py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button onClick={onBack} className="text-white/40 hover:text-white/70 text-sm">← Back</button>
@@ -79,7 +79,7 @@ export function PracticeDashboard({ progress, onSelectLesson, onBack }: Practice
                   className={`rounded-lg border p-3 text-center transition-all ${
                     unlocked
                       ? "border-yellow-500/30 bg-yellow-500/10"
-                      : "border-white/5 bg-white/[0.02] opacity-40"
+                      : "border-white/5 bg-surface-raised opacity-40"
                   }`}
                 >
                   <div className="text-2xl mb-1">{ach.icon}</div>
@@ -123,7 +123,7 @@ function UnitSection({ unit, progress, onSelectLesson }: { unit: Unit; progress:
                   ? "border-white/5 bg-white/[0.01] opacity-40 cursor-not-allowed"
                   : isComplete
                   ? "border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10"
-                  : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
+                  : "border-white/5 bg-surface-raised hover:bg-surface-overlay"
               }`}
               whileHover={isUnlocked ? { scale: 1.01 } : {}}
               whileTap={isUnlocked ? { scale: 0.99 } : {}}
@@ -162,7 +162,7 @@ function StatCard({ label, value, sub, color }: { label: string; value: string; 
     blue: "text-blue-400", yellow: "text-yellow-400", orange: "text-orange-400", emerald: "text-emerald-400",
   };
   return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2 md:p-3 text-center">
+    <div className="rounded-lg border border-white/5 bg-surface-raised p-2 md:p-3 text-center">
       <div className="text-[9px] md:text-[10px] text-white/40 mb-0.5">{label}</div>
       <div className={`text-sm md:text-lg font-bold ${colors[color]}`}>{value}</div>
       <div className="text-[8px] md:text-[9px] text-white/30">{sub}</div>

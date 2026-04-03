@@ -22,6 +22,11 @@
     --input: 220 13% 87%;
     --ring: 217 91% 50%;
     --radius: 0.5rem;
+
+    /* Surface elevation tiers (dark mode depth) — RGB for Tailwind alpha support */
+    --surface-base: 15 15 35;
+    --surface-raised: 22 22 49;
+    --surface-overlay: 30 30 58;
   }
 }
 
@@ -218,7 +223,7 @@
 .frosted-glass {
   backdrop-filter: blur(10px);
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 /* Safe areas for mobile */

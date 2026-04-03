@@ -63,7 +63,7 @@ export function Teleprompter({ script, isActive, isLive, onToggle }: Teleprompte
     return (
       <button
         onClick={onToggle}
-        className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-30 w-8 h-8 md:w-auto md:h-auto md:px-3 md:py-1.5 rounded-lg bg-black/70 backdrop-blur border border-white/10 text-[9px] md:text-[10px] text-white/60 hover:text-white/90 flex items-center justify-center md:gap-1"
+        className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-30 w-8 h-8 md:w-auto md:h-auto md:px-3 md:py-1.5 rounded-lg bg-black/70 backdrop-blur border border-white/5 text-[9px] md:text-[10px] text-white/60 hover:text-white/90 flex items-center justify-center md:gap-1"
       >
         <span>📄</span>
         <span className="hidden md:inline">Script</span>
@@ -79,14 +79,14 @@ export function Teleprompter({ script, isActive, isLive, onToggle }: Teleprompte
       style={{ maxHeight: typeof window !== "undefined" && window.innerWidth < 768 ? mobileHeight : "30%" }}
     >
       {/* Control bar */}
-      <div className="flex items-center justify-between px-2 md:px-3 py-1 bg-black/80 backdrop-blur-md border-t border-white/10 flex-shrink-0">
+      <div className="flex items-center justify-between px-2 md:px-3 py-1 bg-black/80 backdrop-blur-md border-t border-white/5 flex-shrink-0">
         <div className="flex items-center gap-1.5">
           <span className="text-[8px] md:text-[9px] text-white/30 uppercase tracking-wider">Script</span>
 
           {/* Play / Pause */}
           <button
             onClick={() => setIsScrolling(!isScrolling)}
-            className="w-6 h-6 rounded bg-white/10 hover:bg-white/20 text-[10px] text-white/70 flex items-center justify-center"
+            className="w-6 h-6 rounded bg-surface-overlay hover:bg-surface-overlay text-[10px] text-white/70 flex items-center justify-center"
             title={isScrolling ? "Pause" : "Play"}
           >
             {isScrolling ? "⏸" : "▶"}
@@ -95,7 +95,7 @@ export function Teleprompter({ script, isActive, isLive, onToggle }: Teleprompte
           {/* Rewind */}
           <button
             onClick={handleRewind}
-            className="w-6 h-6 rounded bg-white/10 hover:bg-white/20 text-[10px] text-white/70 flex items-center justify-center"
+            className="w-6 h-6 rounded bg-surface-overlay hover:bg-surface-overlay text-[10px] text-white/70 flex items-center justify-center"
             title="Rewind"
           >
             ⏪
@@ -104,7 +104,7 @@ export function Teleprompter({ script, isActive, isLive, onToggle }: Teleprompte
           {/* Reset */}
           <button
             onClick={handleReset}
-            className="w-6 h-6 rounded bg-white/10 hover:bg-white/20 text-[10px] text-white/70 flex items-center justify-center"
+            className="w-6 h-6 rounded bg-surface-overlay hover:bg-surface-overlay text-[10px] text-white/70 flex items-center justify-center"
             title="Reset to start"
           >
             ↺
@@ -140,9 +140,9 @@ export function Teleprompter({ script, isActive, isLive, onToggle }: Teleprompte
             <span className="text-[8px] text-yellow-400/70 mr-1">Waiting for Go Live...</span>
           )}
           {/* Font size */}
-          <button onClick={() => setFontSize((s) => Math.max(11, s - 1))} className="w-6 h-6 md:w-5 md:h-5 rounded bg-white/10 text-[9px] text-white/50 flex items-center justify-center">A-</button>
-          <button onClick={() => setFontSize((s) => Math.min(22, s + 1))} className="w-6 h-6 md:w-5 md:h-5 rounded bg-white/10 text-[9px] text-white/50 flex items-center justify-center">A+</button>
-          <button onClick={onToggle} className="w-6 h-6 md:w-5 md:h-5 rounded bg-white/10 text-[9px] text-white/50 flex items-center justify-center">✕</button>
+          <button onClick={() => setFontSize((s) => Math.max(11, s - 1))} className="w-6 h-6 md:w-5 md:h-5 rounded bg-surface-overlay text-[9px] text-white/50 flex items-center justify-center">A-</button>
+          <button onClick={() => setFontSize((s) => Math.min(22, s + 1))} className="w-6 h-6 md:w-5 md:h-5 rounded bg-surface-overlay text-[9px] text-white/50 flex items-center justify-center">A+</button>
+          <button onClick={onToggle} className="w-6 h-6 md:w-5 md:h-5 rounded bg-surface-overlay text-[9px] text-white/50 flex items-center justify-center">✕</button>
         </div>
       </div>
 

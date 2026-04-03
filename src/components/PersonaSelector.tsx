@@ -94,9 +94,9 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
   const selectedPersonas = PERSONA_LIBRARY.filter((p) => selected.has(p.id));
 
   return (
-    <div className="min-h-screen bg-[#0f0f23] text-white">
+    <div className="min-h-screen bg-surface-base text-white">
       {/* Header */}
-      <header className="border-b border-white/10 px-6 py-4">
+      <header className="border-b border-white/5 px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-blue-500 flex items-center justify-center font-bold text-sm">PP</div>
@@ -109,7 +109,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
             {onPractice && (
               <button
                 onClick={onPractice}
-                className="px-4 py-2.5 border border-white/10 hover:bg-white/[0.04] rounded-lg text-sm font-medium transition-colors text-white/60"
+                className="px-4 py-2.5 border border-white/5 hover:bg-surface-overlay rounded-lg text-sm font-medium transition-colors text-white/60"
               >
                 Practice
               </button>
@@ -117,7 +117,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
             {onViewCollection && (
               <button
                 onClick={onViewCollection}
-                className="px-4 py-2.5 border border-white/10 hover:bg-white/[0.04] rounded-lg text-sm font-medium transition-colors text-white/60"
+                className="px-4 py-2.5 border border-white/5 hover:bg-surface-overlay rounded-lg text-sm font-medium transition-colors text-white/60"
               >
                 Collection
               </button>
@@ -174,7 +174,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
                 className={`text-left p-4 rounded-lg border transition-all ${
                   sessionType === st.id
                     ? "border-blue-400 bg-blue-500/10"
-                    : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"
+                    : "border-white/5 bg-surface-raised hover:bg-surface-overlay"
                 }`}
               >
                 <div className="text-sm font-medium mb-1">{st.label}</div>
@@ -199,7 +199,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
                 className={`flex-shrink-0 text-left p-4 rounded-lg border transition-all min-w-[200px] ${
                   activePack === pack.id
                     ? "border-blue-400 bg-blue-500/10"
-                    : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"
+                    : "border-white/5 bg-surface-raised hover:bg-surface-overlay"
                 }`}
               >
                 <div className="flex items-center gap-2 mb-1">
@@ -212,7 +212,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
             ))}
           </div>
 
-          <div className="mb-6 px-4 py-3 rounded-lg border border-white/10 bg-white/[0.02] text-xs text-white/50 leading-relaxed">
+          <div className="mb-6 px-4 py-3 rounded-lg border border-white/5 bg-surface-raised text-xs text-white/50 leading-relaxed">
             {ARCHETYPE_DISCLAIMER}
           </div>
 
@@ -264,8 +264,8 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
                             : isSelected
                             ? "border-blue-400 bg-blue-500/15 shadow-lg shadow-blue-500/20"
                             : isSpotlit
-                            ? "border-white/30 bg-white/[0.06]"
-                            : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/20"
+                            ? "border-white/30 bg-surface-overlay"
+                            : "border-white/5 bg-surface-raised hover:bg-surface-overlay hover:border-white/20"
                         }`}
                       >
                         {/* Selection flash effect */}
@@ -341,7 +341,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="rounded-xl border border-white/10 bg-white/[0.02] p-6 text-center text-white/30 text-sm h-full min-h-[300px] flex items-center justify-center"
+                    className="rounded-xl border border-white/5 bg-surface-raised p-6 text-center text-white/30 text-sm h-full min-h-[300px] flex items-center justify-center"
                   >
                     <div>
                       <div className="text-2xl mb-2">👆</div>
@@ -360,7 +360,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 20 }}
-                className="mt-8 p-4 rounded-xl border border-white/10 bg-white/[0.03]"
+                className="mt-8 p-4 rounded-xl border border-white/5 bg-surface-raised"
               >
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xs font-medium text-white/50 uppercase tracking-wider">
@@ -434,7 +434,7 @@ function SpotlightPanel({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.2 }}
-      className="rounded-xl border border-white/10 overflow-hidden"
+      className="rounded-xl border border-white/5 overflow-hidden"
       style={{
         background: `radial-gradient(ellipse at 50% 0%, ${packColor}15 0%, transparent 70%), rgba(255,255,255,0.02)`,
       }}
@@ -473,7 +473,7 @@ function SpotlightPanel({
               {unlocked ? persona.name : "???"}
             </h3>
             {unlocked && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/50">
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-overlay text-white/50">
                 {persona.age}
               </span>
             )}
@@ -512,14 +512,14 @@ function SpotlightPanel({
               className={`w-full py-2.5 rounded-lg text-sm font-medium transition-all ${
                 isSelected
                   ? "bg-blue-500/20 border border-blue-400 text-blue-300 hover:bg-blue-500/30"
-                  : "bg-white/5 border border-white/10 text-white/70 hover:bg-white/10"
+                  : "bg-surface-raised border border-white/5 text-white/70 hover:bg-surface-overlay"
               }`}
             >
               {isSelected ? "Remove from Team" : "Add to Team"}
             </button>
           </>
         ) : (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-white/[0.03] border border-white/5">
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-surface-raised border border-white/5">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="text-white/20 flex-shrink-0">
               <path d="M8 1a4 4 0 0 0-4 4v3H3a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1h-1V5a4 4 0 0 0-4-4z" fill="currentColor" />
             </svg>
