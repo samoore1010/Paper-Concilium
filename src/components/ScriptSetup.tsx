@@ -245,16 +245,7 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
   };
 
   return (
-    <div className="min-h-[100dvh] bg-surface-base text-white flex flex-col">
-      <header className="border-b border-white/5 px-4 md:px-6 py-3">
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
-          <button onClick={onBack} className="text-white/40 hover:text-white/70 text-sm">← Back</button>
-          <h1 className="text-sm md:text-base font-semibold">Script Setup</h1>
-          <div />
-        </div>
-      </header>
-
-      <div className="flex-1 max-w-3xl mx-auto px-4 md:px-6 py-6 w-full">
+    <div className="flex-1 flex flex-col px-4 md:px-6 py-6">
         <p className="text-xs md:text-sm text-white/50 mb-6">Would you like to use a teleprompter during your session?</p>
 
         {/* Mode selection */}
@@ -563,7 +554,6 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
             {mode === "none" ? "Start Without Script" : "Start With Teleprompter"}
           </button>
         </div>
-      </div>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { getTheme } from "./data/themes";
 import { loadProgress, recordExercise, UserProgress, Achievement } from "./data/practice/progress";
 import { DeliveryScore } from "./data/practice/scoring";
 import { loadCollection, recordCharacterSession, CollectionProgress } from "./data/characterCollection";
+import { AppShell, type AppView } from "./components/layout/AppShell";
 import { PracticeDashboard } from "./components/practice/PracticeDashboard";
 import { ExerciseView } from "./components/practice/ExerciseView";
 import { PersonaSelector } from "./components/PersonaSelector";
@@ -15,17 +16,7 @@ import { ProgressDashboard } from "./components/ProgressDashboard";
 import { ScriptSetup, ScriptConfig } from "./components/ScriptSetup";
 import { MeetingRoom, SessionRecordingData } from "./components/MeetingRoom";
 import { FeedbackView } from "./components/FeedbackView";
-
-type AppView =
-  | "practice-dashboard"
-  | "practice-exercise"
-  | "setup"
-  | "script-setup"
-  | "meeting"
-  | "feedback"
-  | "joining"
-  | "collection"
-  | "progress";
+import { SettingsPage } from "./components/SettingsPage";
 
 export default function App() {
   const [view, setView] = useState<AppView>("setup");
@@ -41,11 +32,16 @@ export default function App() {
   const [characterCollection, setCharacterCollection] = useState<CollectionProgress>(loadCollection());
   const [unlockToast, setUnlockToast] = useState<string | null>(null);
 
+  // === NAVIGATION ===
+  const handleNavigate = (target: AppView) => {
+    setView(target);
+  };
+
   // === PERFORM MODE HANDLERS ===
   const handleStartSession = (personas: Persona[], type: string) => {
     setSelectedPersonas(personas);
     setSessionType(type);
-    setView("script-setup"); // go to script setup before joining
+    setView("script-setup");
   };
 
   const handleScriptContinue = (config: ScriptConfig) => {
@@ -58,7 +54,6 @@ export default function App() {
     setTranscript(tx);
     setRecordingData(recording);
 
-    // Record character collection progress
     const personaIds = selectedPersonas.map((p) => p.id);
     const perPersonaScores: Record<string, number> = {};
     for (const item of fb) {
@@ -119,6 +114,33 @@ export default function App() {
 
   const theme = getTheme(sessionType);
 
+  // === HEADER ACTIONS (context-specific) ===
+  const headerActions = (() => {
+    switch (view) {
+      case "setup":
+        return (
+          <button
+            onClick={() => {
+              const personas = PERSONA_LIBRARY.filter((p) => selectedPersonas.map(sp => sp.id).includes(p.id));
+              if (personas.length > 0) handleStartSession(personas, sessionType);
+            }}
+            disabled={selectedPersonas.length === 0}
+            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
+          >
+            Start Session
+          </button>
+        );
+      case "feedback":
+        return (
+          <button onClick={handleNewSession} className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-sm font-medium transition-colors">
+            New Session
+          </button>
+        );
+      default:
+        return null;
+    }
+  })();
+
   return (
     <>
       {/* Unlock toast */}
@@ -157,75 +179,84 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence mode="wait">
-        {view === "practice-dashboard" && (
-          <motion.div key="practice-dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
-            <PracticeDashboard progress={practiceProgress} onSelectLesson={handleSelectLesson} onBack={() => setView("setup")} />
-          </motion.div>
-        )}
+      <AppShell
+        currentView={view}
+        onNavigate={handleNavigate}
+        headerActions={headerActions}
+        streakCount={practiceProgress.currentStreak}
+      >
+        <AnimatePresence mode="wait">
+          {view === "practice-dashboard" && (
+            <motion.div key="practice-dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
+              <PracticeDashboard progress={practiceProgress} onSelectLesson={handleSelectLesson} />
+            </motion.div>
+          )}
 
-        {view === "practice-exercise" && (
-          <motion.div key="practice-exercise" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
-            <ExerciseView
-              lessonId={currentLessonId}
-              onComplete={handleExerciseComplete}
-              onBack={() => { setPracticeProgress(loadProgress()); setView("practice-dashboard"); }}
-            />
-          </motion.div>
-        )}
+          {view === "practice-exercise" && (
+            <motion.div key="practice-exercise" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
+              <ExerciseView
+                lessonId={currentLessonId}
+                onComplete={handleExerciseComplete}
+                onBack={() => { setPracticeProgress(loadProgress()); setView("practice-dashboard"); }}
+              />
+            </motion.div>
+          )}
 
-        {view === "script-setup" && (
-          <motion.div key="script-setup" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
-            <ScriptSetup sessionType={sessionType} onContinue={handleScriptContinue} onBack={() => setView("setup")} />
-          </motion.div>
-        )}
+          {view === "script-setup" && (
+            <motion.div key="script-setup" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
+              <ScriptSetup sessionType={sessionType} onContinue={handleScriptContinue} onBack={() => setView("setup")} />
+            </motion.div>
+          )}
 
-        {view === "joining" && (
-          <motion.div key="joining" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.5 }}>
-            <ThemedInterstitial title={theme.transitionLabel} subtext={theme.transitionSubtext} accentColor={theme.accentColor} backgroundClass={theme.backgroundClass} />
-          </motion.div>
-        )}
+          {view === "joining" && (
+            <motion.div key="joining" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.5 }}>
+              <ThemedInterstitial title={theme.transitionLabel} subtext={theme.transitionSubtext} accentColor={theme.accentColor} backgroundClass={theme.backgroundClass} />
+            </motion.div>
+          )}
 
-        {view === "meeting" && (
-          <motion.div key="meeting" className="h-screen" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.6 }}>
-            <MeetingRoom personas={selectedPersonas} sessionType={sessionType} scriptConfig={scriptConfig} onEndSession={handleEndSession} onBack={handleNewSession} />
-          </motion.div>
-        )}
+          {view === "meeting" && (
+            <motion.div key="meeting" className="h-screen" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.6 }}>
+              <MeetingRoom personas={selectedPersonas} sessionType={sessionType} scriptConfig={scriptConfig} onEndSession={handleEndSession} onBack={handleNewSession} />
+            </motion.div>
+          )}
 
-        {view === "feedback" && (
-          <motion.div key="feedback" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.5 }}>
-            <FeedbackView feedback={feedback} transcript={transcript} recordingData={recordingData} onNewSession={handleNewSession} onViewSession={handleViewSession} onViewProgress={() => setView("progress")} />
-          </motion.div>
-        )}
+          {view === "feedback" && (
+            <motion.div key="feedback" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.5 }}>
+              <FeedbackView feedback={feedback} transcript={transcript} recordingData={recordingData} onNewSession={handleNewSession} onViewSession={handleViewSession} onViewProgress={() => setView("progress")} />
+            </motion.div>
+          )}
 
-        {view === "progress" && (
-          <motion.div key="progress" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
-            <ProgressDashboard onBack={() => setView("setup")} />
-          </motion.div>
-        )}
+          {view === "progress" && (
+            <motion.div key="progress" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
+              <ProgressDashboard onBack={() => setView("setup")} />
+            </motion.div>
+          )}
 
-        {view === "setup" && (
-          <motion.div key="setup" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
-            <PersonaSelector
-              onStartSession={handleStartSession}
-              onViewSession={handleViewSession}
-              collection={characterCollection}
-              onViewCollection={() => setView("collection")}
-              onPractice={() => setView("practice-dashboard")}
-              onProgress={() => setView("progress")}
-            />
-          </motion.div>
-        )}
+          {view === "setup" && (
+            <motion.div key="setup" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
+              <PersonaSelector
+                onStartSession={handleStartSession}
+                onViewSession={handleViewSession}
+                collection={characterCollection}
+              />
+            </motion.div>
+          )}
 
-        {view === "collection" && (
-          <motion.div key="collection" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
-            <CollectionDashboard
-              collection={characterCollection}
-              onBack={() => { setCharacterCollection(loadCollection()); setView("setup"); }}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+          {view === "collection" && (
+            <motion.div key="collection" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
+              <CollectionDashboard
+                collection={characterCollection}
+              />
+            </motion.div>
+          )}
+
+          {view === "settings" && (
+            <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
+              <SettingsPage />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </AppShell>
     </>
   );
 }

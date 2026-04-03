@@ -5,37 +5,13 @@ import { UserProgress, getLevelProgress, LEVEL_NAMES, ACHIEVEMENTS } from "../..
 interface PracticeDashboardProps {
   progress: UserProgress;
   onSelectLesson: (lessonId: string) => void;
-  onBack: () => void;
 }
 
-export function PracticeDashboard({ progress, onSelectLesson, onBack }: PracticeDashboardProps) {
+export function PracticeDashboard({ progress, onSelectLesson }: PracticeDashboardProps) {
   const levelInfo = getLevelProgress(progress);
 
   return (
-    <div className="min-h-[100dvh] bg-surface-base text-white">
-      {/* Header */}
-      <header className="border-b border-white/5 px-4 md:px-6 py-3 md:py-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={onBack} className="text-white/40 hover:text-white/70 text-sm">← Back</button>
-            <div>
-              <h1 className="text-base md:text-lg font-semibold">Practice Mode</h1>
-              <p className="text-caption md:text-xs text-white/40">Improve your delivery, one exercise at a time</p>
-            </div>
-          </div>
-          {/* Streak */}
-          <div className="flex items-center gap-3">
-            {progress.currentStreak > 0 && (
-              <div className="flex items-center gap-1 text-orange-400">
-                <span className="text-sm">🔥</span>
-                <span className="text-xs font-bold">{progress.currentStreak}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-4xl mx-auto px-4 md:px-6 py-6">
+    <div className="px-4 md:px-6 py-6">
         {/* Stats bar */}
         <div className="grid grid-cols-4 gap-2 md:gap-3 mb-section-sm md:mb-section">
           <StatCard label="Level" value={LEVEL_NAMES[progress.level]} sub={`${progress.totalXP} XP`} color="blue" />
@@ -96,7 +72,6 @@ export function PracticeDashboard({ progress, onSelectLesson, onBack }: Practice
             })}
           </div>
         </div>
-      </div>
     </div>
   );
 }

@@ -16,10 +16,9 @@ import { MiiAvatar } from "./MiiAvatar";
 
 interface CollectionDashboardProps {
   collection: CollectionProgress;
-  onBack: () => void;
 }
 
-export function CollectionDashboard({ collection, onBack }: CollectionDashboardProps) {
+export function CollectionDashboard({ collection }: CollectionDashboardProps) {
   const [activePack, setActivePack] = useState<PersonaPack | "all">("all");
   const [selectedPersona, setSelectedPersona] = useState<Persona | null>(null);
 
@@ -31,28 +30,7 @@ export function CollectionDashboard({ collection, onBack }: CollectionDashboardP
       : PERSONA_LIBRARY.filter((p) => p.pack === activePack);
 
   return (
-    <div className="min-h-screen bg-surface-base text-white">
-      {/* Header */}
-      <header className="border-b border-white/5 px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className="text-white/40 hover:text-white transition-colors text-sm"
-            >
-              &larr; Back
-            </button>
-            <div>
-              <h1 className="text-lg font-semibold tracking-tight">Character Collection</h1>
-              <p className="text-xs text-white/40">
-                {summary.totalUnlocked}/{summary.totalCharacters} unlocked
-              </p>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-6xl mx-auto px-6 py-8">
+    <div className="px-6 py-8">
         {/* Summary Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-section-sm md:mb-section">
           <StatCard label="Characters" value={`${summary.totalUnlocked}/${summary.totalCharacters}`} sub="unlocked" />
@@ -166,7 +144,6 @@ export function CollectionDashboard({ collection, onBack }: CollectionDashboardP
             })}
           </div>
         </section>
-      </div>
 
       {/* Character Detail Modal */}
       {selectedPersona && (
