@@ -13,7 +13,7 @@ export function PracticeDashboard({ progress, onSelectLesson }: PracticeDashboar
   return (
     <div className="px-4 md:px-6 py-6">
         {/* Stats bar */}
-        <div className="grid grid-cols-4 gap-2 md:gap-3 mb-section-sm md:mb-section">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 md:gap-3 mb-section-sm md:mb-section">
           <StatCard label="Level" value={LEVEL_NAMES[progress.level]} sub={`${progress.totalXP} XP`} color="blue" />
           <StatCard label="Stars" value={progress.totalStars.toString()} sub={`earned`} color="yellow" />
           <StatCard label="Streak" value={`${progress.currentStreak}d`} sub={`best: ${progress.longestStreak}d`} color="orange" />
