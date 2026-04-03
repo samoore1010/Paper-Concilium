@@ -53,7 +53,7 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
 
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-4 md:py-8">
         {/* Tabs */}
-        <div className="flex gap-4 mb-6 md:mb-8 border-b border-white/5">
+        <div className="flex gap-4 mb-section-sm md:mb-section border-b border-white/5">
           <button onClick={() => setTab("feedback")} className={`px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm font-medium border-b-2 ${tab === "feedback" ? "border-blue-400 text-white" : "border-transparent text-white/50"}`}>
             Feedback
           </button>
@@ -70,7 +70,7 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
         {tab === "feedback" && (
           <>
             {/* Summary — responsive grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 md:gap-4 mb-6 md:mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 md:gap-4 mb-section-sm md:mb-section">
               <div className={`rounded-lg border p-3 md:p-4 ${scoreBg(avgScore)}`}>
                 <div className="text-[10px] md:text-xs text-white/50 mb-0.5">Score</div>
                 <div className={`text-xl md:text-3xl font-bold ${scoreColor(avgScore)}`}>{avgScore}</div>
@@ -88,9 +88,12 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
               </div>
             </div>
 
+            {/* Section Divider */}
+            <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-section-sm md:mb-section" />
+
             {/* Delivery Analysis (Prosody) */}
             {prosody && (
-              <div className="rounded-lg border border-white/5 bg-surface-raised p-4 md:p-5 mb-6 md:mb-8">
+              <div className="rounded-lg border border-white/5 bg-surface-raised p-4 md:p-5 mb-section-sm md:mb-section">
                 <h3 className="text-xs md:text-sm font-medium text-white/70 mb-3">Delivery Analysis</h3>
                 <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
                   <DeliveryStat label="Volume" value={prosody.averageVolume} unit="%" advice={prosody.averageVolume < 20 ? "Speak louder" : prosody.averageVolume > 80 ? "Too loud" : "Good"} />
@@ -101,6 +104,9 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
                 </div>
               </div>
             )}
+
+            {/* Section Divider */}
+            <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-section-sm md:mb-section" />
 
             {/* Persona feedback detail */}
             <div className="flex flex-col md:flex-row gap-4 md:gap-6">

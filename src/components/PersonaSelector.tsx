@@ -136,8 +136,8 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
       <div className="max-w-6xl mx-auto px-6 py-8">
         {/* Recent Sessions */}
         {recentSessions.length > 0 && (
-          <section className="mb-10">
-            <h2 className="text-sm font-medium text-white/60 uppercase tracking-wider mb-4">Recent Sessions</h2>
+          <section className="mb-section-sm md:mb-section">
+            <h2 className="text-sm font-medium text-white/60 uppercase tracking-wider mb-subsection-sm md:mb-subsection">Recent Sessions</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {recentSessions.map((session) => {
                 const scoreColor = session.overallScore >= 7 ? "text-emerald-400" : session.overallScore >= 5 ? "text-yellow-400" : "text-red-400";
@@ -163,9 +163,14 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
           </section>
         )}
 
+        {/* Section Divider */}
+        {recentSessions.length > 0 && (
+          <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-section-sm md:mb-section" />
+        )}
+
         {/* Session Type */}
-        <section className="mb-10">
-          <h2 className="text-sm font-medium text-white/60 uppercase tracking-wider mb-4">Session Type</h2>
+        <section className="mb-section-sm md:mb-section">
+          <h2 className="text-sm font-medium text-white/60 uppercase tracking-wider mb-subsection-sm md:mb-subsection">Session Type</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {SESSION_TYPES.map((st) => (
               <button
@@ -184,14 +189,17 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
           </div>
         </section>
 
+        {/* Section Divider */}
+        <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-section-sm md:mb-section" />
+
         {/* Audience Pack Selection */}
         <section>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-subsection-sm md:mb-subsection">
             <h2 className="text-sm font-medium text-white/60 uppercase tracking-wider">Choose Your Audience</h2>
           </div>
 
           {/* Pack Tabs with slide animation */}
-          <div className="grid grid-cols-1 md:flex md:flex-wrap gap-2 md:gap-3 mb-6">
+          <div className="grid grid-cols-1 md:flex md:flex-wrap gap-2 md:gap-3 mb-subsection-sm md:mb-subsection">
             {PERSONA_PACKS.map((pack) => (
               <button
                 key={pack.id}
@@ -212,11 +220,11 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
             ))}
           </div>
 
-          <div className="mb-6 px-4 py-3 rounded-lg border border-white/5 bg-surface-raised text-xs text-white/50 leading-relaxed">
+          <div className="mb-subsection-sm md:mb-subsection px-4 py-3 rounded-lg border border-white/5 bg-surface-raised text-xs text-white/50 leading-relaxed">
             {ARCHETYPE_DISCLAIMER}
           </div>
 
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-subsection-sm md:mb-subsection">
             <span className="text-xs text-white/40">{filteredPersonas.length} characters in this pack</span>
             <button onClick={selectAll} className="text-xs text-blue-400 hover:text-blue-300">
               {allPackSelected ? "Deselect All" : "Select All"}
@@ -353,6 +361,9 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
             </div>
           </div>
 
+          {/* Section Divider */}
+          <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mt-section-sm md:mt-section" />
+
           {/* ===== TEAM DOCK ===== */}
           <AnimatePresence>
             {selectedPersonas.length > 0 && (
@@ -360,7 +371,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 20 }}
-                className="mt-8 p-4 rounded-xl border border-white/5 bg-surface-raised"
+                className="mt-section-sm md:mt-section p-4 rounded-xl border border-white/5 bg-surface-raised"
               >
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-xs font-medium text-white/50 uppercase tracking-wider">
