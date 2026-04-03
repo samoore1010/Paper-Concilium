@@ -37,9 +37,9 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
   const scoreBar = (s: number) => s >= 7 ? "bg-emerald-400" : s >= 5 ? "bg-yellow-400" : "bg-red-400";
 
   return (
-    <div className="min-h-[100dvh] bg-[#0f0f23] text-white">
+    <div className="min-h-[100dvh] bg-surface-base text-white">
       {/* Header */}
-      <header className="border-b border-white/10 px-4 md:px-6 py-3 md:py-4">
+      <header className="border-b border-white/5 px-4 md:px-6 py-3 md:py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div>
             <h1 className="text-base md:text-lg font-semibold">Session Feedback</h1>
@@ -53,7 +53,7 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
 
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-4 md:py-8">
         {/* Tabs */}
-        <div className="flex gap-4 mb-6 md:mb-8 border-b border-white/10">
+        <div className="flex gap-4 mb-6 md:mb-8 border-b border-white/5">
           <button onClick={() => setTab("feedback")} className={`px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm font-medium border-b-2 ${tab === "feedback" ? "border-blue-400 text-white" : "border-transparent text-white/50"}`}>
             Feedback
           </button>
@@ -76,12 +76,12 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
                 <div className={`text-xl md:text-3xl font-bold ${scoreColor(avgScore)}`}>{avgScore}</div>
                 <div className="text-[10px] text-white/30">out of 10</div>
               </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 md:p-4">
+              <div className="rounded-lg border border-white/5 bg-surface-raised p-3 md:p-4">
                 <div className="text-[10px] md:text-xs text-white/50 mb-0.5">Audience</div>
                 <div className="text-xl md:text-3xl font-bold">{feedback.length}</div>
                 <div className="text-[10px] text-white/30">personas</div>
               </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 md:p-4">
+              <div className="rounded-lg border border-white/5 bg-surface-raised p-3 md:p-4">
                 <div className="text-[10px] md:text-xs text-white/50 mb-0.5">Words</div>
                 <div className="text-xl md:text-3xl font-bold">{transcript.split(/\s+/).filter(Boolean).length}</div>
                 <div className="text-[10px] text-white/30">spoken</div>
@@ -90,7 +90,7 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
 
             {/* Delivery Analysis (Prosody) */}
             {prosody && (
-              <div className="rounded-lg border border-white/10 bg-white/[0.02] p-4 md:p-5 mb-6 md:mb-8">
+              <div className="rounded-lg border border-white/5 bg-surface-raised p-4 md:p-5 mb-6 md:mb-8">
                 <h3 className="text-xs md:text-sm font-medium text-white/70 mb-3">Delivery Analysis</h3>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                   <DeliveryStat label="Volume" value={prosody.averageVolume} unit="%" advice={prosody.averageVolume < 20 ? "Speak louder" : prosody.averageVolume > 80 ? "Too loud" : "Good"} />
@@ -117,7 +117,7 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
                         className={`flex items-center gap-2 md:gap-3 p-2 md:p-3 rounded-lg border text-left transition-all flex-shrink-0 md:w-full ${
                           i === selectedIdx
                             ? "border-blue-400 bg-blue-500/10"
-                            : "border-white/5 bg-white/[0.02] hover:bg-white/[0.04]"
+                            : "border-white/5 bg-surface-raised hover:bg-surface-overlay"
                         }`}
                       >
                         <MiiAvatar persona={p} size={36} />
@@ -165,7 +165,7 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
                   </div>
 
                   {/* Summary */}
-                  <div className="rounded-lg border border-white/10 bg-white/[0.02] p-4 md:p-5">
+                  <div className="rounded-lg border border-white/5 bg-surface-raised p-4 md:p-5">
                     <h3 className="text-xs md:text-sm font-medium text-white/70 mb-1.5 md:mb-2">Summary</h3>
                     <p className="text-xs md:text-sm text-white/60 leading-relaxed">{selected.summary}</p>
                   </div>
@@ -237,7 +237,7 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
                     <button
                       key={session.id}
                       onClick={() => session.feedback && onViewSession?.(session)}
-                      className={`rounded-lg border border-white/10 bg-white/[0.02] p-3 md:p-4 w-full text-left transition-all ${session.feedback ? "hover:bg-white/[0.05] cursor-pointer" : ""}`}
+                      className={`rounded-lg border border-white/5 bg-surface-raised p-3 md:p-4 w-full text-left transition-all ${session.feedback ? "hover:bg-surface-overlay cursor-pointer" : ""}`}
                     >
                       <div className="flex items-start justify-between mb-2 md:mb-3">
                         <div>
@@ -271,7 +271,7 @@ function DeliveryStat({ label, value, unit, advice }: { label: string; value: nu
   const color = value < 20 ? "text-red-400" : value > 70 ? "text-emerald-400" : "text-yellow-400";
   const barColor = value < 20 ? "bg-red-400" : value > 70 ? "bg-emerald-400" : "bg-yellow-400";
   return (
-    <div className="bg-white/5 rounded-lg p-3">
+    <div className="bg-surface-raised rounded-lg p-3">
       <div className="text-[10px] text-white/50 mb-1">{label}</div>
       <div className={`text-lg font-bold ${color}`}>{value}{unit}</div>
       <div className="w-full h-1 rounded-full bg-white/10 mt-1 overflow-hidden">

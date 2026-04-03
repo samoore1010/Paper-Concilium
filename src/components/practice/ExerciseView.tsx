@@ -35,7 +35,7 @@ export function ExerciseView({ lessonId, onComplete, onBack }: ExerciseViewProps
     return null;
   })();
 
-  if (!lesson) return <div className="min-h-screen bg-[#0f0f23] text-white flex items-center justify-center">Lesson not found</div>;
+  if (!lesson) return <div className="min-h-screen bg-surface-base text-white flex items-center justify-center">Lesson not found</div>;
 
   const exercises = lesson.lesson.exercises;
   const currentExercise = exercises[currentIdx];
@@ -90,9 +90,9 @@ export function ExerciseView({ lessonId, onComplete, onBack }: ExerciseViewProps
   const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
   return (
-    <div className="min-h-[100dvh] bg-[#0f0f23] text-white flex flex-col">
+    <div className="min-h-[100dvh] bg-surface-base text-white flex flex-col">
       {/* Top bar */}
-      <header className="border-b border-white/10 px-4 py-3 flex items-center justify-between flex-shrink-0">
+      <header className="border-b border-white/5 px-4 py-3 flex items-center justify-between flex-shrink-0">
         <button onClick={onBack} className="text-white/40 hover:text-white/70 text-sm">← Exit</button>
         <div className="text-center">
           <div className="text-xs font-medium">{lesson.lesson.title}</div>
@@ -119,7 +119,7 @@ export function ExerciseView({ lessonId, onComplete, onBack }: ExerciseViewProps
 
         {/* Script / Teleprompter */}
         <div className={`flex-1 rounded-xl border p-4 md:p-6 mb-4 md:mb-6 overflow-y-auto transition-all ${
-          state === "recording" ? "border-purple-500/40 bg-purple-500/5" : "border-white/10 bg-white/[0.02]"
+          state === "recording" ? "border-purple-500/40 bg-purple-500/5" : "border-white/5 bg-surface-raised"
         }`}>
           {state === "done" && score ? (
             <ScoreDisplay score={score} exercise={currentExercise} isLast={currentIdx >= exercises.length - 1} onNext={handleNext} onRetry={handleRetry} />
@@ -221,7 +221,7 @@ function ScoreDisplay({ score, exercise, isLast, onNext, onRetry }: {
 
       {/* Actions */}
       <div className="flex gap-3 justify-center">
-        <button onClick={onRetry} className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-medium">
+        <button onClick={onRetry} className="px-4 py-2 bg-surface-raised hover:bg-surface-overlay rounded-lg text-xs font-medium">
           Retry
         </button>
         <button onClick={onNext} className="px-6 py-2 bg-purple-500 hover:bg-purple-600 rounded-lg text-xs font-medium">
@@ -241,7 +241,7 @@ function LiveMetric({ label, value, target, bad }: { label: string; value: numbe
   }
 
   return (
-    <div className="bg-white/5 rounded-lg p-2">
+    <div className="bg-surface-raised rounded-lg p-2">
       <div className="text-[9px] text-white/40">{label}</div>
       <div className={`text-sm font-bold ${color}`}>{value}</div>
     </div>

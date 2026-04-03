@@ -116,8 +116,8 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
   };
 
   return (
-    <div className="min-h-[100dvh] bg-[#0f0f23] text-white flex flex-col">
-      <header className="border-b border-white/10 px-4 md:px-6 py-3">
+    <div className="min-h-[100dvh] bg-surface-base text-white flex flex-col">
+      <header className="border-b border-white/5 px-4 md:px-6 py-3">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <button onClick={onBack} className="text-white/40 hover:text-white/70 text-sm">← Back</button>
           <h1 className="text-sm md:text-base font-semibold">Script Setup</h1>
@@ -160,7 +160,7 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
               value={uploadedText}
               onChange={(e) => setUploadedText(e.target.value)}
               placeholder="Paste or type your script here..."
-              className="w-full h-48 md:h-64 bg-white/5 border border-white/10 rounded-xl p-4 text-sm text-white placeholder-white/30 outline-none focus:border-blue-400/50 resize-none"
+              className="w-full h-48 md:h-64 bg-surface-raised border border-white/5 rounded-xl p-4 text-sm text-white placeholder-white/30 outline-none focus:border-blue-400/50 resize-none"
             />
             <div className="text-[10px] text-white/30 mt-1">{uploadedText.split(/\s+/).filter(Boolean).length} words</div>
           </motion.div>
@@ -183,7 +183,7 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder={`e.g., ${getRandomTopic(sessionType)}`}
-                className="w-full h-24 bg-white/5 border border-white/10 rounded-xl p-3 text-sm text-white placeholder-white/30 outline-none focus:border-purple-400/50 resize-none"
+                className="w-full h-24 bg-surface-raised border border-white/5 rounded-xl p-3 text-sm text-white placeholder-white/30 outline-none focus:border-purple-400/50 resize-none"
               />
             </div>
             <div className="flex items-center gap-4">
@@ -192,7 +192,7 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
                 <select
                   value={duration}
                   onChange={(e) => setDuration(Number(e.target.value))}
-                  className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none"
+                  className="bg-surface-raised border border-white/5 rounded-lg px-3 py-2 text-sm text-white outline-none"
                 >
                   <option value={1}>1 minute</option>
                   <option value={2}>2 minutes</option>
@@ -216,7 +216,7 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
                 <textarea
                   value={generatedText}
                   onChange={(e) => setGeneratedText(e.target.value)}
-                  className="w-full h-48 md:h-64 bg-white/5 border border-purple-500/30 rounded-xl p-4 text-sm text-white outline-none resize-none"
+                  className="w-full h-48 md:h-64 bg-surface-raised border border-purple-500/30 rounded-xl p-4 text-sm text-white outline-none resize-none"
                 />
                 <div className="text-[10px] text-white/30 mt-1">{generatedText.split(/\s+/).filter(Boolean).length} words · ~{Math.round(generatedText.split(/\s+/).filter(Boolean).length / 130)} min</div>
               </motion.div>
@@ -245,7 +245,7 @@ function ModeButton({ selected, onClick, icon, title, description }: {
     <button
       onClick={onClick}
       className={`text-left p-4 rounded-xl border transition-all ${
-        selected ? "border-blue-400 bg-blue-500/10" : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"
+        selected ? "border-blue-400 bg-blue-500/10" : "border-white/5 bg-surface-raised hover:bg-surface-overlay"
       }`}
     >
       <div className="text-2xl mb-2">{icon}</div>

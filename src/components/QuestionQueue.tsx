@@ -113,7 +113,7 @@ export function QuestionQueue({
                 className={`rounded-lg border p-2.5 transition-colors ${
                   isSpeaking
                     ? "border-emerald-500/40 bg-emerald-500/10"
-                    : "border-white/10 bg-white/[0.03]"
+                    : "border-white/5 bg-surface-raised"
                 }`}
               >
                 {/* Persona info */}
@@ -163,13 +163,13 @@ export function QuestionQueue({
                   )}
                   <button
                     onClick={() => onRead(q)}
-                    className="flex-1 px-2 py-1 rounded text-[10px] font-medium bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70 transition-colors"
+                    className="flex-1 px-2 py-1 rounded text-[10px] font-medium bg-surface-raised text-white/50 hover:bg-surface-overlay hover:text-white/70 transition-colors"
                   >
                     Read
                   </button>
                   <button
                     onClick={() => onDismiss(q.id)}
-                    className="px-2 py-1 rounded text-[10px] text-white/30 hover:text-white/50 hover:bg-white/5 transition-colors"
+                    className="px-2 py-1 rounded text-[10px] text-white/30 hover:text-white/50 hover:bg-surface-overlay transition-colors"
                   >
                     Dismiss
                   </button>

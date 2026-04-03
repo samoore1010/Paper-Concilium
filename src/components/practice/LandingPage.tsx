@@ -6,7 +6,7 @@ interface LandingPageProps {
 
 export function LandingPage({ onSelectMode }: LandingPageProps) {
   return (
-    <div className="min-h-[100dvh] bg-[#0f0f23] text-white flex flex-col">
+    <div className="min-h-[100dvh] bg-surface-base text-white flex flex-col">
       {/* Header */}
       <header className="px-6 py-6 text-center">
         <div className="flex items-center justify-center gap-3 mb-2">

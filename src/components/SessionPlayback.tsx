@@ -211,7 +211,7 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
       </div>
 
       {/* Waveform canvas */}
-      <div ref={containerRef} className="relative rounded-lg bg-white/[0.02] border border-white/10 overflow-hidden">
+      <div ref={containerRef} className="relative rounded-lg bg-surface-raised border border-white/5 overflow-hidden">
         <canvas
           ref={canvasRef}
           className="w-full cursor-pointer"
@@ -227,7 +227,7 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
       <div className="flex items-center gap-3">
         <button
           onClick={togglePlay}
-          className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+          className="w-10 h-10 rounded-full bg-surface-overlay hover:bg-white/20 flex items-center justify-center text-white transition-colors"
         >
           {isPlaying ? "⏸" : "▶"}
         </button>
@@ -267,7 +267,7 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
                     }
                   }}
                   className={`w-full text-left flex items-center gap-2 px-2 py-1 rounded text-[11px] transition-colors ${
-                    isActive ? "bg-white/10" : "bg-white/[0.02] hover:bg-white/5"
+                    isActive ? "bg-surface-overlay" : "bg-surface-raised hover:bg-surface-overlay"
                   }`}
                 >
                   <span className="text-xs">{icons[evt.type] || "📌"}</span>
@@ -282,7 +282,7 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
 
       {/* Coaching Report */}
       {coachingReport && (
-        <div className="space-y-4 mt-6 pt-6 border-t border-white/10">
+        <div className="space-y-4 mt-6 pt-6 border-t border-white/5">
           {/* Overall Score */}
           <div className="flex items-center gap-4">
             <div className={`text-4xl font-bold ${coachingReport.overallScore >= 70 ? "text-emerald-400" : coachingReport.overallScore >= 50 ? "text-yellow-400" : "text-red-400"}`}>
@@ -338,7 +338,7 @@ function CoachingCard({ title, rating, advice, stats, className }: {
   };
 
   return (
-    <div className={`rounded-xl border border-white/10 bg-white/[0.02] p-4 ${className || ""}`}>
+    <div className={`rounded-xl border border-white/5 bg-surface-raised p-4 ${className || ""}`}>
       <div className="flex items-center justify-between mb-2">
         <h4 className="text-xs font-semibold text-white/80">{title}</h4>
         <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/5 ${ratingColors[rating] || "text-white/50"}`}>
