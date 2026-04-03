@@ -13,9 +13,11 @@ interface AudienceTileProps {
   pendingQuestion?: QueuedQuestion;
   onQuestionClick?: (question: QueuedQuestion) => void;
   onClick?: () => void;
+  /** Theme accent color for avatar rim lighting */
+  themeAccentColor?: string;
 }
 
-export function AudienceTile({ persona, reaction, reactionEmoji, isActive, isMuted = true, isSpeaking, pendingQuestion, onQuestionClick, onClick }: AudienceTileProps) {
+export function AudienceTile({ persona, reaction, reactionEmoji, isActive, isMuted = true, isSpeaking, pendingQuestion, onQuestionClick, onClick, themeAccentColor }: AudienceTileProps) {
   const getReactionGlowClass = () => {
     if (isSpeaking) return "reaction-glow-speaking";
     if (reaction === "nod" || reaction === "smile") return "reaction-glow-positive";
@@ -27,7 +29,7 @@ export function AudienceTile({ persona, reaction, reactionEmoji, isActive, isMut
   const displayReaction = isSpeaking ? "speaking" as ReactionType : reaction;
 
   return (
-    <div className="relative h-full">
+    <div className="relative h-full" style={{ perspective: 600 }}>
       {/* Question bubble floating above tile */}
       <AnimatePresence>
         {pendingQuestion && !isSpeaking && (
@@ -63,9 +65,17 @@ export function AudienceTile({ persona, reaction, reactionEmoji, isActive, isMut
           bg-gradient-to-b from-[#2a2a4a]/60 to-[#1a1a2e]/60 hover:from-[#32325a]/70 hover:to-[#22223a]/70`}
         style={{ borderRadius: 8, minHeight: 80 }}
       >
-        {/* Avatar */}
-        <div className="animate-breathe mt-2 flex-1 flex items-end">
-          <MiiAvatar persona={persona} size={typeof window !== "undefined" && window.innerWidth < 768 ? 70 : 110} reaction={displayReaction} showReactionEmoji={reactionEmoji} />
+        {/* Avatar with pseudo-3D depth */}
+        <div className="mt-2 flex-1 flex items-end">
+          <MiiAvatar
+            persona={persona}
+            size={typeof window !== "undefined" && window.innerWidth < 768 ? 70 : 110}
+            reaction={displayReaction}
+            showReactionEmoji={reactionEmoji}
+            themeAccentColor={themeAccentColor}
+            enableParallax={true}
+            isActiveSpeaker={!!isSpeaking}
+          />
         </div>
 
         {/* Name bar */}
