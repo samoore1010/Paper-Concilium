@@ -468,7 +468,8 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
         personas.map((p) => p.id),
         text,
         sessionType,
-        [...recentChat, `You: ${text}`]
+        [...recentChat, `You: ${text}`],
+        scriptConfig?.sourceContext || undefined
       ).then((reactions) => {
         llmInFlightRef.current = false;
         if (sessionEndedRef.current) return;

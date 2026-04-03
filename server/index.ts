@@ -407,13 +407,13 @@ app.post("/api/react", async (req, res) => {
   const client = getClient();
   if (!client) return res.status(503).json({ error: "LLM not configured." });
 
-  const { personaId, userText, sessionType, messageHistory } = req.body;
+  const { personaId, userText, sessionType, messageHistory, sourceContext } = req.body;
   if (!personaId || !userText) return res.status(400).json({ error: "personaId and userText required" });
 
   const effectiveSessionType = sessionType || "business-pitch";
   try {
     const persona = getPersonaPrompt(personaId, effectiveSessionType);
-    const prompt = buildReactionPrompt(persona, userText, effectiveSessionType, messageHistory || []);
+    const prompt = buildReactionPrompt(persona, userText, effectiveSessionType, messageHistory || [], sourceContext || undefined);
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001", max_tokens: 300,
       system: persona.systemPrompt, messages: [{ role: "user", content: prompt }],
@@ -432,7 +432,7 @@ app.post("/api/react-batch", async (req, res) => {
   const client = getClient();
   if (!client) return res.status(503).json({ error: "LLM not configured." });
 
-  const { personaIds, userText, sessionType, messageHistory } = req.body;
+  const { personaIds, userText, sessionType, messageHistory, sourceContext } = req.body;
   if (!personaIds?.length || !userText) return res.status(400).json({ error: "personaIds and userText required" });
 
   const effectiveSessionType = sessionType || "business-pitch";
@@ -440,7 +440,7 @@ app.post("/api/react-batch", async (req, res) => {
     const results = await Promise.allSettled(
       personaIds.map(async (personaId: string) => {
         const persona = getPersonaPrompt(personaId, effectiveSessionType);
-        const prompt = buildReactionPrompt(persona, userText, effectiveSessionType, messageHistory || []);
+        const prompt = buildReactionPrompt(persona, userText, effectiveSessionType, messageHistory || [], sourceContext || undefined);
         const message = await client.messages.create({
           model: "claude-haiku-4-5-20251001", max_tokens: 300,
           system: persona.systemPrompt, messages: [{ role: "user", content: prompt }],

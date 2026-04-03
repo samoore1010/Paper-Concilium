@@ -38,12 +38,13 @@ export async function getLLMReactionsBatch(
   personaIds: string[],
   userText: string,
   sessionType: string,
-  messageHistory: string[]
+  messageHistory: string[],
+  sourceContext?: { summary: string; filenames: string[]; combinedText: string }
 ): Promise<LLMReaction[]> {
   const res = await fetch(`${API_BASE}/api/react-batch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ personaIds, userText, sessionType, messageHistory }),
+    body: JSON.stringify({ personaIds, userText, sessionType, messageHistory, sourceContext }),
   });
 
   if (!res.ok) throw new Error("Failed to get LLM reactions");
