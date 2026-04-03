@@ -7,7 +7,6 @@ import { getTheme } from "./data/themes";
 import { loadProgress, recordExercise, UserProgress, Achievement } from "./data/practice/progress";
 import { DeliveryScore } from "./data/practice/scoring";
 import { loadCollection, recordCharacterSession, CollectionProgress } from "./data/characterCollection";
-import { LandingPage } from "./components/practice/LandingPage";
 import { PracticeDashboard } from "./components/practice/PracticeDashboard";
 import { ExerciseView } from "./components/practice/ExerciseView";
 import { PersonaSelector } from "./components/PersonaSelector";
@@ -17,7 +16,6 @@ import { MeetingRoom, SessionRecordingData } from "./components/MeetingRoom";
 import { FeedbackView } from "./components/FeedbackView";
 
 type AppView =
-  | "landing"
   | "practice-dashboard"
   | "practice-exercise"
   | "setup"
@@ -28,7 +26,7 @@ type AppView =
   | "collection";
 
 export default function App() {
-  const [view, setView] = useState<AppView>("landing");
+  const [view, setView] = useState<AppView>("setup");
   const [selectedPersonas, setSelectedPersonas] = useState<Persona[]>([]);
   const [sessionType, setSessionType] = useState("business-pitch");
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
@@ -158,15 +156,9 @@ export default function App() {
       </AnimatePresence>
 
       <AnimatePresence mode="wait">
-        {view === "landing" && (
-          <motion.div key="landing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
-            <LandingPage onSelectMode={(mode) => setView(mode === "practice" ? "practice-dashboard" : "setup")} />
-          </motion.div>
-        )}
-
         {view === "practice-dashboard" && (
           <motion.div key="practice-dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
-            <PracticeDashboard progress={practiceProgress} onSelectLesson={handleSelectLesson} onBack={() => setView("landing")} />
+            <PracticeDashboard progress={practiceProgress} onSelectLesson={handleSelectLesson} onBack={() => setView("setup")} />
           </motion.div>
         )}
 
@@ -211,6 +203,7 @@ export default function App() {
               onViewSession={handleViewSession}
               collection={characterCollection}
               onViewCollection={() => setView("collection")}
+              onPractice={() => setView("practice-dashboard")}
             />
           </motion.div>
         )}
