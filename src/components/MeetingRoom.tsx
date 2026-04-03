@@ -792,6 +792,8 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
         pendingQuestion={questionQueue.find((q) => q.personaId === persona.id)}
         onQuestionClick={handleQuestionClick}
         themeAccentColor={theme.accentColor}
+        characterContext={theme.characterContext}
+        showEntrance={elapsed < 3}
       />
     );
   });

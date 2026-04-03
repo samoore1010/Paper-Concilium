@@ -9,6 +9,23 @@ export interface AmbientEffect {
   intensity: "subtle" | "medium";
 }
 
+export type CharacterPosture = "seated-formal" | "seated-relaxed" | "seated-row" | "seated-boardroom" | "standing-neutral";
+
+export interface CharacterContext {
+  /** Default character posture in this room */
+  posture: CharacterPosture;
+  /** Gesture animation scale multiplier (0.6 = restrained, 1.0 = normal, 1.3 = energetic) */
+  gestureScale: number;
+  /** Which fidget types are appropriate in this room context */
+  allowedFidgetCategories: ("head" | "hands" | "body" | "accessory")[];
+  /** SVG element rendered beneath each character to ground them in the space */
+  seatingProp?: {
+    type: "chair" | "bench-seat" | "statement-chair" | "desk-edge" | "theater-seat";
+    color: string;
+    accentColor?: string;
+  };
+}
+
 export interface SessionTheme {
   id: string;
   label: string;
@@ -22,6 +39,8 @@ export interface SessionTheme {
   transitionSubtext: string;
   tileBorderColor: string;
   topBarAccent: string;
+  /** How characters should present in this room */
+  characterContext: CharacterContext;
 }
 
 export const SESSION_THEMES: Record<string, SessionTheme> = {
@@ -44,6 +63,12 @@ export const SESSION_THEMES: Record<string, SessionTheme> = {
     transitionSubtext: "The investors are waiting",
     tileBorderColor: "border-amber-500/30",
     topBarAccent: "from-amber-900/30 to-transparent",
+    characterContext: {
+      posture: "seated-relaxed",
+      gestureScale: 1.3,
+      allowedFidgetCategories: ["head", "hands", "body", "accessory"],
+      seatingProp: { type: "statement-chair", color: "#2a1f0a", accentColor: "#d4a017" },
+    },
   },
   "mock-trial": {
     id: "mock-trial",
@@ -63,6 +88,12 @@ export const SESSION_THEMES: Record<string, SessionTheme> = {
     transitionSubtext: "All rise",
     tileBorderColor: "border-amber-800/30",
     topBarAccent: "from-amber-950/40 to-transparent",
+    characterContext: {
+      posture: "seated-formal",
+      gestureScale: 0.6,
+      allowedFidgetCategories: ["head", "accessory"],
+      seatingProp: { type: "bench-seat", color: "#3d2b1f", accentColor: "#8b4513" },
+    },
   },
   "public-speaking": {
     id: "public-speaking",
@@ -85,6 +116,12 @@ export const SESSION_THEMES: Record<string, SessionTheme> = {
     transitionSubtext: "The audience awaits",
     tileBorderColor: "border-indigo-500/30",
     topBarAccent: "from-indigo-900/30 to-transparent",
+    characterContext: {
+      posture: "seated-row",
+      gestureScale: 1.0,
+      allowedFidgetCategories: ["head", "hands", "body", "accessory"],
+      seatingProp: { type: "theater-seat", color: "#2a2050", accentColor: "#6366f1" },
+    },
   },
   "sales-demo": {
     id: "sales-demo",
@@ -104,6 +141,12 @@ export const SESSION_THEMES: Record<string, SessionTheme> = {
     transitionSubtext: "Your clients are ready",
     tileBorderColor: "border-sky-500/30",
     topBarAccent: "from-sky-900/30 to-transparent",
+    characterContext: {
+      posture: "seated-boardroom",
+      gestureScale: 0.8,
+      allowedFidgetCategories: ["head", "hands", "accessory"],
+      seatingProp: { type: "desk-edge", color: "#1a2030", accentColor: "#0ea5e9" },
+    },
   },
 };
 

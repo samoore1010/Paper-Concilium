@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { PERSONA_LIBRARY, PERSONA_PACKS, ARCHETYPE_DISCLAIMER, Persona, PersonaPack } from "../data/personas";
 import { MiiAvatar } from "./MiiAvatar";
 import { getRecentSessions, SessionRecord } from "../data/sessionHistory";
@@ -25,48 +26,53 @@ const SESSION_TYPES = [
   { id: "sales-demo", label: "Sales Demo", desc: "Rehearse a product demo for prospective clients" },
 ];
 
+/** Pack accent colors for themed glows */
+const PACK_COLORS: Record<PersonaPack, string> = {
+  general: "#6366f1",
+  "legal-bench": "#8b4513",
+  "business-tank": "#d4a017",
+};
+
 export function PersonaSelector({ onStartSession, onViewSession, collection, onViewCollection }: PersonaSelectorProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sessionType, setSessionType] = useState("business-pitch");
   const [activePack, setActivePack] = useState<PersonaPack>("general");
   const [recentSessions, setRecentSessions] = useState<SessionRecord[]>([]);
-  const [staggerIndex, setStaggerIndex] = useState(-1);
+  const [spotlightPersona, setSpotlightPersona] = useState<Persona | null>(null);
+  const [selectFlash, setSelectFlash] = useState<string | null>(null);
 
   useEffect(() => {
     setRecentSessions(getRecentSessions(3));
   }, []);
 
   const filteredPersonas = PERSONA_LIBRARY.filter((p) => p.pack === activePack);
-
-  useEffect(() => {
-    setStaggerIndex(-1);
-    let current = -1;
-    const interval = setInterval(() => {
-      current++;
-      if (current < filteredPersonas.length) {
-        setStaggerIndex(current);
-      } else {
-        clearInterval(interval);
-      }
-    }, 50);
-    return () => clearInterval(interval);
-  }, [activePack, filteredPersonas.length]);
+  const packColor = PACK_COLORS[activePack];
 
   const handlePackChange = (pack: PersonaPack) => {
     setActivePack(pack);
     setSelected(new Set());
+    setSpotlightPersona(null);
     const packInfo = PERSONA_PACKS.find((p) => p.id === pack);
     if (packInfo) setSessionType(packInfo.sessionType);
   };
 
-  const isUnlocked = (id: string) => collection.unlockedCharacters.includes(id);
+  const isUnlocked = useCallback(
+    (id: string) => collection.unlockedCharacters.includes(id),
+    [collection.unlockedCharacters]
+  );
 
-  const togglePersona = (id: string) => {
-    if (!isUnlocked(id)) return;
+  const togglePersona = (persona: Persona) => {
+    if (!isUnlocked(persona.id)) return;
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(persona.id)) {
+        next.delete(persona.id);
+      } else {
+        next.add(persona.id);
+        // Flash effect on selection
+        setSelectFlash(persona.id);
+        setTimeout(() => setSelectFlash(null), 400);
+      }
       return next;
     });
   };
@@ -175,7 +181,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
             <h2 className="text-sm font-medium text-white/60 uppercase tracking-wider">Choose Your Audience</h2>
           </div>
 
-          {/* Pack Tabs */}
+          {/* Pack Tabs with slide animation */}
           <div className="flex gap-3 mb-6 overflow-x-auto pb-1">
             {PERSONA_PACKS.map((pack) => (
               <button
@@ -208,89 +214,330 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredPersonas.map((persona, idx) => {
-              const unlocked = isUnlocked(persona.id);
-              const isSelected = selected.has(persona.id);
-              const isAnimating = idx <= staggerIndex;
-              const stats = getCharacterStats(collection, persona.id);
-              const req = getUnlockRequirement(persona.id);
+          {/* ===== CHARACTER SELECT LAYOUT ===== */}
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* Roster Grid — compact character tiles */}
+            <div className="flex-1">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activePack}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  transition={{ duration: 0.25 }}
+                  className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2"
+                >
+                  {filteredPersonas.map((persona, idx) => {
+                    const unlocked = isUnlocked(persona.id);
+                    const isSelected = selected.has(persona.id);
+                    const isSpotlit = spotlightPersona?.id === persona.id;
+                    const isFlashing = selectFlash === persona.id;
+                    const req = getUnlockRequirement(persona.id);
 
-              if (!unlocked) {
-                return (
-                  <div
-                    key={persona.id}
-                    className={`relative text-left p-4 rounded-lg border border-white/5 bg-white/[0.01] ${isAnimating ? "animate-stagger-in" : "opacity-0"}`}
-                    style={{ animationDelay: `${idx * 50}ms` }}
+                    return (
+                      <motion.button
+                        key={persona.id}
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: idx * 0.03, type: "spring", stiffness: 300, damping: 25 }}
+                        onClick={() => {
+                          if (unlocked) {
+                            togglePersona(persona);
+                            setSpotlightPersona(persona);
+                          } else {
+                            setSpotlightPersona(persona);
+                          }
+                        }}
+                        onMouseEnter={() => setSpotlightPersona(persona)}
+                        className={`relative flex flex-col items-center p-2 rounded-lg border transition-all ${
+                          !unlocked
+                            ? "border-white/5 bg-white/[0.01] cursor-default"
+                            : isSelected
+                            ? "border-blue-400 bg-blue-500/15 shadow-lg shadow-blue-500/20"
+                            : isSpotlit
+                            ? "border-white/30 bg-white/[0.06]"
+                            : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/20"
+                        }`}
+                      >
+                        {/* Selection flash effect */}
+                        {isFlashing && (
+                          <motion.div
+                            initial={{ opacity: 0.8, scale: 1 }}
+                            animate={{ opacity: 0, scale: 1.5 }}
+                            transition={{ duration: 0.4 }}
+                            className="absolute inset-0 rounded-lg bg-blue-400/40 pointer-events-none"
+                          />
+                        )}
+
+                        {/* Avatar */}
+                        <div className={`${!unlocked ? "opacity-15 grayscale" : ""} transition-all`}>
+                          <MiiAvatar persona={persona} size={56} />
+                        </div>
+
+                        {/* Name */}
+                        <div className={`text-[10px] font-medium mt-1 truncate w-full text-center ${
+                          !unlocked ? "text-white/15" : "text-white/80"
+                        }`}>
+                          {unlocked ? persona.name.split(" ")[0] : "???"}
+                        </div>
+
+                        {/* Lock icon overlay */}
+                        {!unlocked && (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="bg-black/40 rounded-full p-1.5 animate-pulse">
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="text-white/30">
+                                <path d="M8 1a4 4 0 0 0-4 4v3H3a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1h-1V5a4 4 0 0 0-4-4z" fill="currentColor" />
+                              </svg>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Selection checkmark */}
+                        {isSelected && unlocked && (
+                          <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center">
+                            <svg width="8" height="8" viewBox="0 0 16 16" fill="white">
+                              <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z" />
+                            </svg>
+                          </div>
+                        )}
+
+                        {/* Spotlight indicator dot */}
+                        {isSpotlit && unlocked && (
+                          <div
+                            className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full"
+                            style={{ backgroundColor: packColor }}
+                          />
+                        )}
+                      </motion.button>
+                    );
+                  })}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+
+            {/* Spotlight Preview Panel */}
+            <div className="lg:w-[320px] flex-shrink-0">
+              <AnimatePresence mode="wait">
+                {spotlightPersona ? (
+                  <SpotlightPanel
+                    key={spotlightPersona.id}
+                    persona={spotlightPersona}
+                    unlocked={isUnlocked(spotlightPersona.id)}
+                    isSelected={selected.has(spotlightPersona.id)}
+                    collection={collection}
+                    packColor={packColor}
+                    onToggle={() => togglePersona(spotlightPersona)}
+                  />
+                ) : (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="rounded-xl border border-white/10 bg-white/[0.02] p-6 text-center text-white/30 text-sm h-full min-h-[300px] flex items-center justify-center"
                   >
-                    <div className="flex gap-4">
-                      <div className="flex-shrink-0 opacity-20 grayscale">
-                        <MiiAvatar persona={persona} size={80} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm text-white/20 mb-1">???</div>
-                        <div className="text-[10px] text-white/15 italic mb-2">{persona.archetype}</div>
-                        <div className="flex items-center gap-1.5">
-                          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="text-white/20">
-                            <path d="M8 1a4 4 0 0 0-4 4v3H3a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1h-1V5a4 4 0 0 0-4-4z" fill="currentColor" />
+                    <div>
+                      <div className="text-2xl mb-2">👆</div>
+                      <div>Hover over a character to preview</div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          {/* ===== TEAM DOCK ===== */}
+          <AnimatePresence>
+            {selectedPersonas.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+                className="mt-8 p-4 rounded-xl border border-white/10 bg-white/[0.03]"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-medium text-white/50 uppercase tracking-wider">
+                    Your Team ({selectedPersonas.length})
+                  </h3>
+                  <button
+                    onClick={() => onStartSession(selectedPersonas, sessionType)}
+                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Ready!
+                  </button>
+                </div>
+                <div className="flex gap-3 overflow-x-auto pb-1">
+                  {selectedPersonas.map((persona) => (
+                    <motion.button
+                      key={persona.id}
+                      layout
+                      initial={{ opacity: 0, scale: 0.5 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.5 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                      onClick={() => {
+                        togglePersona(persona);
+                        setSpotlightPersona(persona);
+                      }}
+                      className="flex flex-col items-center gap-1 flex-shrink-0 group"
+                    >
+                      <div className="relative">
+                        <MiiAvatar persona={persona} size={48} enableParallax={false} />
+                        <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <svg width="8" height="8" viewBox="0 0 16 16" fill="white">
+                            <path d="M4 4l8 8M12 4l-8 8" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
                           </svg>
-                          <span className="text-[10px] text-white/20">{req.description}</span>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                );
-              }
-
-              return (
-                <button
-                  key={persona.id}
-                  onClick={() => togglePersona(persona.id)}
-                  className={`relative text-left p-4 rounded-lg border transition-all ${isAnimating ? "animate-stagger-in" : "opacity-0"} ${
-                    isSelected
-                      ? "border-blue-400 bg-blue-500/10"
-                      : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"
-                  }`}
-                  style={{ animationDelay: `${idx * 50}ms` }}
-                >
-                  <div className="flex gap-4">
-                    <div className="flex-shrink-0">
-                      <MiiAvatar persona={persona} size={80} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="font-medium text-sm">{persona.name}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/50">
-                          {persona.age}
-                        </span>
-                        {stats && stats.masteryTier !== "none" && (
-                          <MasteryBadge tier={stats.masteryTier} />
-                        )}
-                      </div>
-                      <div className="text-[10px] text-white/30 italic mb-1">{persona.archetype}</div>
-                      <div className="flex flex-wrap gap-1.5 mb-2">
-                        <Tag color="blue">{persona.profession}</Tag>
-                        <Tag color="green">{persona.politicalLeaning}</Tag>
-                        <Tag color="orange">{persona.communicationStyle}</Tag>
-                      </div>
-                      <p className="text-xs text-white/40 leading-relaxed line-clamp-2">{persona.bio}</p>
-                    </div>
-                  </div>
-                  {/* Selection indicator */}
-                  <div className={`absolute top-3 right-3 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                    isSelected ? "border-blue-400 bg-blue-500" : "border-white/20"
-                  }`}>
-                    {isSelected && (
-                      <svg width="10" height="10" viewBox="0 0 16 16" fill="white">
-                        <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z" />
-                      </svg>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+                      <span className="text-[9px] text-white/50 font-medium">{persona.name.split(" ")[0]}</span>
+                    </motion.button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </section>
+      </div>
+    </div>
+  );
+}
+
+/** Spotlight panel — large character preview with stats and details */
+function SpotlightPanel({
+  persona,
+  unlocked,
+  isSelected,
+  collection,
+  packColor,
+  onToggle,
+}: {
+  persona: Persona;
+  unlocked: boolean;
+  isSelected: boolean;
+  collection: CollectionProgress;
+  packColor: string;
+  onToggle: () => void;
+}) {
+  const stats = getCharacterStats(collection, persona.id);
+  const req = getUnlockRequirement(persona.id);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      transition={{ duration: 0.2 }}
+      className="rounded-xl border border-white/10 overflow-hidden"
+      style={{
+        background: `radial-gradient(ellipse at 50% 0%, ${packColor}15 0%, transparent 70%), rgba(255,255,255,0.02)`,
+      }}
+    >
+      {/* Avatar spotlight area */}
+      <div className="relative flex items-center justify-center py-6" style={{ minHeight: 200 }}>
+        {/* Background glow */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: `radial-gradient(circle at 50% 60%, ${packColor}20 0%, transparent 60%)`,
+          }}
+        />
+
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 200, damping: 15 }}
+          className={`relative ${!unlocked ? "grayscale opacity-30" : ""}`}
+        >
+          <MiiAvatar
+            persona={persona}
+            size={160}
+            themeAccentColor={packColor}
+            enableParallax={true}
+          />
+        </motion.div>
+      </div>
+
+      {/* Info section */}
+      <div className="px-5 pb-5">
+        {/* Name + archetype */}
+        <div className="mb-3">
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-semibold">
+              {unlocked ? persona.name : "???"}
+            </h3>
+            {unlocked && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/50">
+                {persona.age}
+              </span>
+            )}
+            {stats && stats.masteryTier !== "none" && (
+              <MasteryBadge tier={stats.masteryTier} />
+            )}
+          </div>
+          <div className="text-xs text-white/40 italic mt-0.5">{persona.archetype}</div>
+          {unlocked && persona.catchphrase && (
+            <div className="text-[11px] text-white/30 mt-1">"{persona.catchphrase}"</div>
+          )}
+        </div>
+
+        {unlocked ? (
+          <>
+            {/* Tags */}
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              <Tag color="blue">{persona.profession}</Tag>
+              <Tag color="green">{persona.politicalLeaning}</Tag>
+              <Tag color="orange">{persona.communicationStyle}</Tag>
+            </div>
+
+            {/* Stats visual */}
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              <StatBar label="Tough" value={persona.stats.toughness} color="#ef4444" />
+              <StatBar label="Depth" value={persona.stats.domainDepth} color="#3b82f6" />
+              <StatBar label="Patient" value={persona.stats.patience} color="#22c55e" />
+            </div>
+
+            {/* Bio */}
+            <p className="text-xs text-white/40 leading-relaxed mb-4">{persona.bio}</p>
+
+            {/* Select button */}
+            <button
+              onClick={onToggle}
+              className={`w-full py-2.5 rounded-lg text-sm font-medium transition-all ${
+                isSelected
+                  ? "bg-blue-500/20 border border-blue-400 text-blue-300 hover:bg-blue-500/30"
+                  : "bg-white/5 border border-white/10 text-white/70 hover:bg-white/10"
+              }`}
+            >
+              {isSelected ? "Remove from Team" : "Add to Team"}
+            </button>
+          </>
+        ) : (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-white/[0.03] border border-white/5">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="text-white/20 flex-shrink-0">
+              <path d="M8 1a4 4 0 0 0-4 4v3H3a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1h-1V5a4 4 0 0 0-4-4z" fill="currentColor" />
+            </svg>
+            <span className="text-[11px] text-white/30">{req.description}</span>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+/** Stat bar — fighting game style power gauge */
+function StatBar({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[9px] text-white/40 uppercase tracking-wider">{label}</span>
+        <span className="text-[9px] font-mono text-white/50">{value}</span>
+      </div>
+      <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${value * 10}%` }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="h-full rounded-full"
+          style={{ backgroundColor: color }}
+        />
       </div>
     </div>
   );

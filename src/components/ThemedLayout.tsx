@@ -74,16 +74,23 @@ interface LayoutProps {
   totalTiles?: number;
 }
 
-// Shark Tank: panel of judges in a row
+// Shark Tank: panel of judges in a row with golden ambient glow
 function PanelLayout({ children, containerVariants, tileVariants }: LayoutProps) {
   return (
     <motion.div
-      className="h-full flex flex-col gap-3"
+      className="h-full flex flex-col gap-3 relative"
       variants={containerVariants}
       initial="hidden"
       animate="visible"
     >
-      <div className="flex-1 flex gap-2 md:gap-3 items-stretch flex-wrap md:flex-nowrap">
+      {/* Golden ambient glow behind panel */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: "radial-gradient(ellipse at 50% 80%, rgba(212,160,23,0.06) 0%, transparent 60%)",
+        }}
+      />
+      <div className="flex-1 flex gap-2 md:gap-3 items-stretch flex-wrap md:flex-nowrap relative z-10">
         {children.map((child, i) => (
           <motion.div
             key={i}
@@ -99,7 +106,7 @@ function PanelLayout({ children, containerVariants, tileVariants }: LayoutProps)
   );
 }
 
-// Courtroom: semicircle jury arc
+// Courtroom: semicircle jury arc with subtle wood-grain texture
 function SemicircleLayout({ children, containerVariants, tileVariants }: LayoutProps) {
   const audienceCount = children.length;
   return (
@@ -109,6 +116,13 @@ function SemicircleLayout({ children, containerVariants, tileVariants }: LayoutP
       initial="hidden"
       animate="visible"
     >
+      {/* Elevated bench backdrop hint */}
+      <div
+        className="absolute top-0 left-[10%] right-[10%] h-[30%] pointer-events-none rounded-b-xl"
+        style={{
+          background: "linear-gradient(to bottom, rgba(139,69,19,0.06) 0%, transparent 100%)",
+        }}
+      />
       {children.map((child, i) => {
         const angleRange = Math.min(140, audienceCount * 25);
         const startAngle = (180 - angleRange) / 2;
@@ -151,7 +165,7 @@ function SemicircleLayout({ children, containerVariants, tileVariants }: LayoutP
   );
 }
 
-// Lecture hall: theater rows with perspective
+// Lecture hall: theater rows with perspective + spotlight from above
 function TheaterLayout({ children, containerVariants, tileVariants }: LayoutProps) {
   const audienceCount = children.length;
   const rowSize = Math.ceil(audienceCount / 2);
@@ -160,18 +174,25 @@ function TheaterLayout({ children, containerVariants, tileVariants }: LayoutProp
 
   return (
     <motion.div
-      className="h-full flex flex-col gap-2 justify-center"
+      className="h-full flex flex-col gap-2 justify-center relative"
       variants={containerVariants}
       initial="hidden"
       animate="visible"
     >
+      {/* Spotlight cone from above */}
+      <div
+        className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] h-[40%] pointer-events-none"
+        style={{
+          background: "radial-gradient(ellipse at 50% 0%, rgba(99,102,241,0.05) 0%, transparent 70%)",
+        }}
+      />
       {backRow.length > 0 && (
-        <div className="flex gap-2 items-stretch px-4 md:px-8 opacity-80" style={{ flex: "0 0 35%" }}>
+        <div className="flex gap-2 items-stretch px-4 md:px-8 opacity-80 relative z-10" style={{ flex: "0 0 35%" }}>
           {backRow.map((child, i) => (
             <motion.div
               key={`back-${i}`}
               className="flex-1"
-              style={{ transform: "scale(0.9)" }}
+              style={{ transform: "scale(0.88)" }}
               variants={tileVariants}
               layout
             >
@@ -180,7 +201,7 @@ function TheaterLayout({ children, containerVariants, tileVariants }: LayoutProp
           ))}
         </div>
       )}
-      <div className="flex gap-2 md:gap-3 items-stretch" style={{ flex: "0 0 45%" }}>
+      <div className="flex gap-2 md:gap-3 items-stretch relative z-10" style={{ flex: "0 0 45%" }}>
         {frontRow.map((child, i) => (
           <motion.div
             key={`front-${i}`}
