@@ -7,6 +7,8 @@ interface MiiAvatarProps {
   persona: Persona;
   size?: number;
   reaction?: ReactionType;
+  /** Reaction intensity 0.3-1.0. Drives animation amplitude. */
+  reactionIntensity?: number;
   showReactionEmoji?: string;
   /** Theme accent color for rim lighting (hex) */
   themeAccentColor?: string;
@@ -33,10 +35,36 @@ const DEFAULT_FIDGET: FidgetState = {
   accessory: "",
 };
 
+/**
+ * Reaction transform targets — defines the physical motion for each reaction type.
+ * Values are at intensity=1.0 and get scaled by actual intensity.
+ */
+interface ReactionTransforms {
+  headRotate: number;    // degrees
+  headY: number;         // px offset
+  headX: number;         // px offset
+  bodyRotate: number;    // degrees
+  bodyY: number;         // px offset
+  shoulderY: number;     // px offset for body follow-through
+  mouthShape: "neutral" | "smile" | "frown" | "open";
+}
+
+const REACTION_TRANSFORMS: Record<ReactionType, ReactionTransforms> = {
+  nod:          { headRotate: -8,  headY: 3,  headX: 0,  bodyRotate: 2,   bodyY: 1,   shoulderY: 1,   mouthShape: "smile" },
+  smile:        { headRotate: -3,  headY: 0,  headX: 0,  bodyRotate: 0,   bodyY: 0,   shoulderY: 0,   mouthShape: "smile" },
+  shake:        { headRotate: 6,   headY: 0,  headX: 4,  bodyRotate: -1,  bodyY: 0,   shoulderY: 0.5, mouthShape: "frown" },
+  frown:        { headRotate: 2,   headY: 1,  headX: 0,  bodyRotate: -1,  bodyY: -0.5, shoulderY: 0,  mouthShape: "frown" },
+  think:        { headRotate: 5,   headY: -2, headX: 1,  bodyRotate: -2,  bodyY: -1,  shoulderY: -0.5, mouthShape: "neutral" },
+  "raised-hand": { headRotate: 0, headY: 0,  headX: 0,  bodyRotate: 0,   bodyY: 0,   shoulderY: 0,   mouthShape: "open" },
+  speaking:     { headRotate: -2,  headY: 1,  headX: 0,  bodyRotate: 3,   bodyY: 1.5, shoulderY: 1,   mouthShape: "open" },
+  neutral:      { headRotate: 0,   headY: 0,  headX: 0,  bodyRotate: 0,   bodyY: 0,   shoulderY: 0,   mouthShape: "neutral" },
+};
+
 export function MiiAvatar({
   persona,
   size = 120,
   reaction = "neutral",
+  reactionIntensity = 0.6,
   showReactionEmoji,
   themeAccentColor = "#6366f1",
   enableParallax = false,
@@ -47,39 +75,76 @@ export function MiiAvatar({
   const [activeFidget, setActiveFidget] = useState<FidgetType | null>(null);
   const fidgetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const animOverrideRef = useRef<HTMLDivElement>(null);
+  const prevReactionRef = useRef<ReactionType>("neutral");
+  const secondaryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const accessoryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settlingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shakeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Derive reaction visuals from props (no setState needed)
-  const REACTION_MAP: Record<ReactionType, { animClass: string; bodyAnimClass: string; mouthShape: "neutral" | "smile" | "frown" | "open" }> = {
-    nod: { animClass: "animate-nod", bodyAnimClass: "animate-lean-forward", mouthShape: "smile" },
-    smile: { animClass: "", bodyAnimClass: "", mouthShape: "smile" },
-    shake: { animClass: "animate-shake-head", bodyAnimClass: "", mouthShape: "frown" },
-    frown: { animClass: "", bodyAnimClass: "", mouthShape: "frown" },
-    think: { animClass: "", bodyAnimClass: "animate-lean-back", mouthShape: "neutral" },
-    "raised-hand": { animClass: "", bodyAnimClass: "", mouthShape: "open" },
-    speaking: { animClass: "", bodyAnimClass: "animate-lean-forward", mouthShape: "open" },
-    neutral: { animClass: "", bodyAnimClass: "", mouthShape: "neutral" },
-  };
-  const reactionVisuals = REACTION_MAP[reaction] || REACTION_MAP.neutral;
-
-  const bodyAnimClass = reactionVisuals.bodyAnimClass;
-  const mouthShape = reactionVisuals.mouthShape;
-
-  // Idle profile based on persona personality
+  // Idle profile with spring physics
   const idleProfile = useMemo(() => getIdleProfile(persona), [persona]);
+  const springCfg = idleProfile.reactionSpring;
+
+  // Clamp intensity
+  const intensity = Math.max(0.3, Math.min(1.0, reactionIntensity));
+
+  // Get reaction transform targets scaled by intensity
+  const reactionTarget = REACTION_TRANSFORMS[reaction] || REACTION_TRANSFORMS.neutral;
+  const mouthShape = reactionTarget.mouthShape;
+
+  // === SPRING-DRIVEN MOTION VALUES ===
+  // Primary head motion
+  const headRotateTarget = useMotionValue(0);
+  const headYTarget = useMotionValue(0);
+  const headXTarget = useMotionValue(0);
+
+  // Secondary body motion (follows head with delay)
+  const bodyRotSpring = useMotionValue(0);
+  const bodyYSpring = useMotionValue(0);
+
+  // Accessory physics (follows head with more delay + higher spring)
+  const accessoryRotateTarget = useMotionValue(0);
+  const accessoryYTarget = useMotionValue(0);
+
+  // Build per-character spring configs from idle profile
+  const primarySpring = useMemo(() => ({
+    stiffness: springCfg.stiffness,
+    damping: springCfg.damping,
+    mass: springCfg.mass,
+  }), [springCfg.stiffness, springCfg.damping, springCfg.mass]);
+
+  const secondarySpring = useMemo(() => ({
+    stiffness: springCfg.stiffness * 0.7,
+    damping: springCfg.damping * 1.2,
+    mass: springCfg.mass * 1.3,
+  }), [springCfg.stiffness, springCfg.damping, springCfg.mass]);
+
+  const accessorySpring = useMemo(() => ({
+    stiffness: springCfg.stiffness * 1.4,
+    damping: springCfg.damping * 0.6,
+    mass: springCfg.mass * 0.5,
+  }), [springCfg.stiffness, springCfg.damping, springCfg.mass]);
+
+  // Smoothed motion values via springs
+  const springHeadRotate = useSpring(headRotateTarget, primarySpring);
+  const springHeadY = useSpring(headYTarget, primarySpring);
+  const springHeadX = useSpring(headXTarget, primarySpring);
+  const springBodyRotate = useSpring(bodyRotSpring, secondarySpring);
+  const springBodyY = useSpring(bodyYSpring, secondarySpring);
+  const springAccRotate = useSpring(accessoryRotateTarget, accessorySpring);
+  const springAccY = useSpring(accessoryYTarget, accessorySpring);
 
   // Parallax motion values
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
 
-  // Spring-smoothed parallax offsets for different depth layers
-  const springConfig = { stiffness: 150, damping: 20 };
-  const layerBackX = useSpring(useTransform(mouseX, [-1, 1], [3, -3]), springConfig);
-  const layerBackY = useSpring(useTransform(mouseY, [-1, 1], [2, -2]), springConfig);
-  const layerMidX = useSpring(useTransform(mouseX, [-1, 1], [1, -1]), springConfig);
-  const layerMidY = useSpring(useTransform(mouseY, [-1, 1], [0.5, -0.5]), springConfig);
-  const layerFrontX = useSpring(useTransform(mouseX, [-1, 1], [-2, 2]), springConfig);
-  const layerFrontY = useSpring(useTransform(mouseY, [-1, 1], [-1.5, 1.5]), springConfig);
+  const parallaxSpring = { stiffness: 150, damping: 20 };
+  const layerBackX = useSpring(useTransform(mouseX, [-1, 1], [3, -3]), parallaxSpring);
+  const layerBackY = useSpring(useTransform(mouseY, [-1, 1], [2, -2]), parallaxSpring);
+  const layerMidX = useSpring(useTransform(mouseX, [-1, 1], [1, -1]), parallaxSpring);
+  const layerMidY = useSpring(useTransform(mouseY, [-1, 1], [0.5, -0.5]), parallaxSpring);
+  const layerFrontX = useSpring(useTransform(mouseX, [-1, 1], [-2, 2]), parallaxSpring);
+  const layerFrontY = useSpring(useTransform(mouseY, [-1, 1], [-1.5, 1.5]), parallaxSpring);
 
   // Handle mouse movement for parallax
   const handleMouseMove = useCallback(
@@ -109,17 +174,108 @@ export function MiiAvatar({
     return () => clearInterval(eyeInterval);
   }, [idleProfile.eyeRestlessness]);
 
-  // Clear one-shot animation class (nod, shake) after it plays via DOM
+  // === PHYSICS-DRIVEN REACTION SYSTEM ===
+  // When reaction changes: drive primary spring → stagger secondary → stagger accessory → settle
   useEffect(() => {
-    const el = animOverrideRef.current;
-    if (!el || !reactionVisuals.animClass) return;
-    // Re-trigger CSS animation by removing/re-adding class
-    el.classList.remove(reactionVisuals.animClass);
-    void el.offsetWidth; // force reflow
-    el.classList.add(reactionVisuals.animClass);
-    const timer = setTimeout(() => el.classList.remove(reactionVisuals.animClass), 1000);
-    return () => clearTimeout(timer);
-  }, [reaction, reactionVisuals.animClass]);
+    prevReactionRef.current = reaction;
+
+    // Clean up previous timers
+    if (secondaryTimerRef.current) clearTimeout(secondaryTimerRef.current);
+    if (accessoryTimerRef.current) clearTimeout(accessoryTimerRef.current);
+    if (settlingTimerRef.current) clearTimeout(settlingTimerRef.current);
+    if (shakeIntervalRef.current) clearInterval(shakeIntervalRef.current);
+
+    const target = REACTION_TRANSFORMS[reaction] || REACTION_TRANSFORMS.neutral;
+    const overshootMult = 1 + springCfg.overshoot * intensity;
+
+    // Step 1: Drive primary head motion immediately (with overshoot)
+    headRotateTarget.set(target.headRotate * intensity * overshootMult);
+    headYTarget.set(target.headY * intensity * overshootMult);
+    headXTarget.set(target.headX * intensity * overshootMult);
+
+    // For head shake: oscillate X position to simulate repeated shake
+    if (reaction === "shake") {
+      let shakeCount = 0;
+      const maxShakes = Math.round(2 + intensity * 3); // 2-5 shakes based on intensity
+      shakeIntervalRef.current = setInterval(() => {
+        shakeCount++;
+        if (shakeCount >= maxShakes) {
+          if (shakeIntervalRef.current) clearInterval(shakeIntervalRef.current);
+          headXTarget.set(0);
+          return;
+        }
+        // Alternate direction with decaying amplitude
+        const decay = 1 - (shakeCount / maxShakes) * 0.6;
+        const direction = shakeCount % 2 === 0 ? 1 : -1;
+        headXTarget.set(target.headX * intensity * direction * decay);
+      }, 180);
+    }
+
+    // Step 2: Secondary motion (shoulders/body) follows after delay
+    secondaryTimerRef.current = setTimeout(() => {
+      bodyRotSpring.set(target.bodyRotate * intensity);
+      bodyYSpring.set((target.bodyY + target.shoulderY) * intensity);
+    }, springCfg.secondaryDelay);
+
+    // Step 3: Accessories follow with more delay + bouncier spring
+    accessoryTimerRef.current = setTimeout(() => {
+      // Accessories respond to head motion — they exaggerate the head's movement
+      const accessoryReact = target.headRotate * intensity * 1.3;
+      const accessoryBounce = target.headY * intensity * 0.8;
+      accessoryRotateTarget.set(accessoryReact);
+      accessoryYTarget.set(accessoryBounce);
+    }, springCfg.accessoryDelay);
+
+    // Step 4: Settling — if reaction is a one-shot (nod, shake), return to neutral after
+    if (reaction === "nod" || reaction === "shake") {
+      const settleDelay = reaction === "shake"
+        ? 180 * Math.round(2 + intensity * 3) + 200 // wait for shakes to finish
+        : 400 + springCfg.settlingDuration * 500;
+
+      settlingTimerRef.current = setTimeout(() => {
+        // Damped return: remove overshoot, settle to gentle rest position
+        headRotateTarget.set(target.headRotate * intensity * 0.15);
+        headYTarget.set(target.headY * intensity * 0.1);
+        headXTarget.set(0);
+
+        // Body settles back
+        setTimeout(() => {
+          bodyRotSpring.set(0);
+          bodyYSpring.set(0);
+        }, springCfg.secondaryDelay * 0.5);
+
+        // Accessories trail behind
+        setTimeout(() => {
+          accessoryRotateTarget.set(0);
+          accessoryYTarget.set(0);
+        }, springCfg.accessoryDelay * 0.5);
+      }, settleDelay);
+    }
+
+    // Neutral: return everything to zero
+    if (reaction === "neutral") {
+      headRotateTarget.set(0);
+      headYTarget.set(0);
+      headXTarget.set(0);
+      // Body follows with delay
+      secondaryTimerRef.current = setTimeout(() => {
+        bodyRotSpring.set(0);
+        bodyYSpring.set(0);
+      }, springCfg.secondaryDelay * 0.7);
+      // Accessories trail
+      accessoryTimerRef.current = setTimeout(() => {
+        accessoryRotateTarget.set(0);
+        accessoryYTarget.set(0);
+      }, springCfg.accessoryDelay * 0.7);
+    }
+
+    return () => {
+      if (secondaryTimerRef.current) clearTimeout(secondaryTimerRef.current);
+      if (accessoryTimerRef.current) clearTimeout(accessoryTimerRef.current);
+      if (settlingTimerRef.current) clearTimeout(settlingTimerRef.current);
+      if (shakeIntervalRef.current) clearInterval(shakeIntervalRef.current);
+    };
+  }, [reaction, intensity, springCfg, headRotateTarget, headYTarget, headXTarget, bodyRotSpring, bodyYSpring, accessoryRotateTarget, accessoryYTarget]);
 
   // Fidget animation system — randomized per-character idle fidgets
   const playFidget = useCallback(() => {
@@ -425,10 +581,7 @@ export function MiiAvatar({
 
   return (
     <div
-      ref={(el) => {
-        containerRef.current = el;
-        animOverrideRef.current = el;
-      }}
+      ref={containerRef}
       className="relative"
       style={{ width: s, height: s }}
       onMouseMove={handleMouseMove}
@@ -486,13 +639,15 @@ export function MiiAvatar({
             </filter>
           </defs>
 
-          {/* ===== LAYER 1 (BACK): Body + Back Arms ===== */}
+          {/* ===== LAYER 1 (BACK): Body + Arms — spring-driven secondary motion ===== */}
           <motion.g
-            className={bodyAnimClass}
             style={{
               x: enableParallax ? layerBackX : 0,
               y: enableParallax ? layerBackY : 0,
+              rotate: springBodyRotate,
+              translateY: springBodyY,
               ...getBreathStyle(),
+              transformOrigin: `${cx}px ${bodyY}px`,
             }}
           >
             <g
@@ -503,17 +658,21 @@ export function MiiAvatar({
               <ellipse cx={cx} cy={bodyY + s * 0.18} rx={s * 0.3} ry={s * 0.22} fill={persona.shirtColor} />
               {/* Neck */}
               <rect x={cx - 6} y={s * 0.58} width={12} height={12} fill={persona.skinTone} />
-              {/* Back arm (left) — rendered behind body for depth */}
+              {/* Arms */}
               {renderArms()}
             </g>
           </motion.g>
 
-          {/* ===== LAYER 2 (MID): Head + Face ===== */}
+          {/* ===== LAYER 2 (MID): Head + Face — spring-driven primary motion ===== */}
           <motion.g
             filter={`url(#rim-${persona.id})`}
             style={{
               x: enableParallax ? layerMidX : 0,
               y: enableParallax ? layerMidY : 0,
+              rotate: springHeadRotate,
+              translateY: springHeadY,
+              translateX: springHeadX,
+              transformOrigin: `${cx}px ${s * 0.36}px`,
             }}
           >
             <g
@@ -562,11 +721,14 @@ export function MiiAvatar({
             </g>
           </motion.g>
 
-          {/* ===== LAYER 3 (FRONT): Accessories ===== */}
+          {/* ===== LAYER 3 (FRONT): Accessories — spring-driven accessory physics ===== */}
           <motion.g
             style={{
               x: enableParallax ? layerFrontX : 0,
               y: enableParallax ? layerFrontY : 0,
+              rotate: springAccRotate,
+              translateY: springAccY,
+              transformOrigin: `${cx}px ${s * 0.36}px`,
             }}
           >
             {renderAccessory()}

@@ -819,10 +819,17 @@ export function composeReactionInstruction(character: CharacterDefinition): stri
   return `Based on what the presenter just said, respond as ${character.name} would. Return a JSON object:
 {
   "reaction": "nod" | "shake" | "think" | "smile" | "frown" | "neutral",
+  "intensity": <number 0.3-1.0>,
   "comment": "A brief in-character reaction (1-2 sentences max, or null if no comment)",
   "question": "A pointed question in your characteristic ${character.behavioral.questioningStyle} style (or null)",
   "reasoning": "Brief internal thought about why you're reacting this way (1 sentence)"
 }
+
+The "intensity" field controls how emphatic your physical reaction is:
+- 0.3 = mild/polite (small nod, faint frown)
+- 0.6 = moderate (clear nod, visible frown)
+- 1.0 = emphatic (vigorous nod, dramatic head shake)
+Choose intensity based on how strongly this statement hits your priorities or pet peeves.
 
 React based on your behavioral profile:
 - NOD/SMILE when you hear: ${character.behavioral.reactionTriggers.leanForward.join(", ")}
