@@ -27,9 +27,10 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
 
   useEffect(() => { setSessionHistory(getSessionHistory()); }, []);
 
-  // Get the most recent session (the one we just completed) for prosody data
+  // Get the most recent session (the one we just completed) for prosody/visual data
   const latestSession = sessionHistory.length > 0 ? sessionHistory[sessionHistory.length - 1] : null;
   const prosody = latestSession?.prosodyMetrics;
+  const visual = latestSession?.visualMetrics;
 
   const selected = feedback[selectedIdx];
   const persona = PERSONA_LIBRARY.find((p) => p.id === selected?.personaId);
@@ -110,6 +111,19 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
                   <DeliveryStat label="Pitch Variety" value={prosody.pitchVariation} unit="%" advice={prosody.pitchVariation < 10 ? "Monotone" : "Expressive"} />
                   <DeliveryStat label="Energy" value={prosody.energyLevel} unit="%" advice={prosody.energyLevel < 20 ? "Low" : prosody.energyLevel > 70 ? "High" : "Moderate"} />
                   <DeliveryStat label="Silence" value={prosody.silenceRatio} unit="%" advice={prosody.silenceRatio > 60 ? "Too many pauses" : "Good pace"} />
+                </div>
+              </div>
+            )}
+
+            {/* Visual Delivery Analysis */}
+            {visual && (
+              <div className="rounded-lg border border-white/5 bg-surface-raised p-4 md:p-5 mb-section-sm md:mb-section">
+                <h3 className="text-xs md:text-sm font-medium text-white/70 mb-3">Visual Delivery</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <DeliveryStat label="Eye Contact" value={visual.eyeContactPercent} unit="%" advice={visual.eyeContactPercent < 40 ? "Look at camera more" : visual.eyeContactPercent > 70 ? "Excellent" : "Good"} />
+                  <DeliveryStat label="Expressiveness" value={visual.expressiveness} unit="%" advice={visual.expressiveness < 20 ? "Try more facial expression" : visual.expressiveness > 60 ? "Very expressive" : "Good"} />
+                  <DeliveryStat label="Gestures" value={visual.gestureCount} unit="" advice={visual.gestureCount < 3 ? "Use more hand gestures" : visual.gestureCount > 20 ? "Very animated" : "Good movement"} />
+                  <DeliveryStat label="Framing" value={visual.framing === "good" ? 100 : visual.framing === "no-face" ? 0 : 50} unit="%" advice={visual.framing === "good" ? "Well positioned" : visual.framing === "too-close" ? "Move back" : visual.framing === "too-far" ? "Move closer" : visual.framing === "off-center" ? "Center yourself" : "Face not detected"} />
                 </div>
               </div>
             )}

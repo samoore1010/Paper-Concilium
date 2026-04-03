@@ -20,6 +20,7 @@ import { useProsody } from "../hooks/useProsody";
 import { useAudioRecorder } from "../hooks/useAudioRecorder";
 import { useVAD } from "../hooks/useVAD";
 import { useTTS } from "../hooks/useTTS";
+import { useVisualAnalysis } from "../hooks/useVisualAnalysis";
 import { addSession, SessionRecord } from "../data/sessionHistory";
 
 export interface SessionRecordingData {
@@ -89,6 +90,12 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
   const behavior = getSessionBehavior(sessionType);
 
   const { isActive: isCameraActive, startCamera, stopCamera, attachVideo } = useCamera();
+  const visualAnalysis = useVisualAnalysis();
+  const videoElRef = useRef<HTMLVideoElement | null>(null);
+  const attachVideoWithAnalysis = useCallback((el: HTMLVideoElement | null) => {
+    attachVideo(el);
+    if (el) videoElRef.current = el;
+  }, [attachVideo]);
   // Speech recognition — try ElevenLabs STT first, fall back to Web Speech API
   const webSpeech = useSpeechRecognition();
   const elSTT = useElevenLabsSTT();
@@ -264,8 +271,12 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
     try { await startVAD(sharedStream || undefined); } catch (e) { console.log("[Continuous] VAD unavailable"); }
     try { await startProsody(sharedStream || undefined); } catch (e) { console.log("[Continuous] Prosody unavailable"); }
     try { await startRecording(sharedStream || undefined); } catch (e) { console.log("[Continuous] Recording unavailable"); }
+    // Start visual analysis if camera is active
+    if (videoElRef.current) {
+      try { await visualAnalysis.start(videoElRef.current); } catch (e) { console.log("[Continuous] Visual analysis unavailable"); }
+    }
     console.log("[Continuous] Started");
-  }, [startListening, startProsody, startVAD, startRecording]);
+  }, [startListening, startProsody, startVAD, startRecording, visualAnalysis]);
 
   const stopContinuousMode = useCallback(() => {
     // Flush any remaining text: coalesce buffer + committed + interim
@@ -282,6 +293,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
     stopListening();
     stopProsody();
     stopVAD();
+    visualAnalysis.stop();
 
     // Stop shared mic stream
     if (sharedStreamRef.current) {
@@ -289,7 +301,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
       sharedStreamRef.current = null;
     }
     console.log("[Continuous] Stopped");
-  }, [stopListening, stopProsody, stopVAD, consumeNewText, flushToChat]);
+  }, [stopListening, stopProsody, stopVAD, visualAnalysis, consumeNewText, flushToChat]);
 
   // ── Strict audience turn lock ──
   // One speaker at a time. Single timer for next interrupt (no concurrent timers).
@@ -704,7 +716,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
     interruptQueueRef.current = [];
     isProcessingInterruptRef.current = false;
     waitingForResponseRef.current = false;
-    stopCamera(); stopListening(); stopTTS(); stopProsody(); stopVAD();
+    stopCamera(); stopListening(); stopTTS(); stopProsody(); stopVAD(); visualAnalysis.stop();
     // Await recording stop to ensure all audio data is flushed
     const recordingResult = await stopRecording();
     setContinuousActive(false);
@@ -768,6 +780,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
       wordCount: ft.split(/\s+/).filter(Boolean).length, duration: elapsed,
       speechMetrics: { wordsPerMinute: speechMetrics.wordsPerMinute, fillerWordCount: speechMetrics.fillerWordCount, longestPause: speechMetrics.longestPause, vocabularyScore: speechMetrics.vocabularyScore },
       prosodyMetrics: { averageVolume: prosodyMetrics.averageVolume, volumeVariation: prosodyMetrics.volumeVariation, pitchVariation: prosodyMetrics.pitchVariation, energyLevel: prosodyMetrics.energyLevel, silenceRatio: prosodyMetrics.silenceRatio },
+      visualMetrics: visualAnalysis.getSnapshot(),
       feedback,
       transcript: ft,
     });
@@ -806,10 +819,17 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
   const selfView = (className: string) => (
     <div className={`rounded-lg bg-black/60 border border-white/20 overflow-hidden relative ${className}`}>
       {isCameraActive ? (
-        <video ref={attachVideo} autoPlay playsInline muted className="w-full h-full object-cover mirror" />
+        <video ref={attachVideoWithAnalysis} autoPlay playsInline muted className="w-full h-full object-cover mirror" />
       ) : (
         <div className="w-full h-full flex items-center justify-center">
           <span className="text-caption text-white/30">Camera Off</span>
+        </div>
+      )}
+      {/* Eye contact HUD overlay */}
+      {isCameraActive && continuousActive && visualAnalysis.available && (
+        <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-sm text-caption flex items-center gap-1">
+          <span className={`w-1.5 h-1.5 rounded-full ${visualAnalysis.metrics.eyeContactPercent > 60 ? "bg-green-400" : visualAnalysis.metrics.eyeContactPercent > 30 ? "bg-yellow-400" : "bg-red-400"}`} />
+          <span className="text-white/80">{visualAnalysis.metrics.eyeContactPercent}%</span>
         </div>
       )}
       <div className="absolute bottom-0 left-0 right-0 px-1.5 py-0.5 bg-gradient-to-t from-black/80 to-transparent flex items-center justify-between">
@@ -941,7 +961,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
             <TabContent
               sideTab={sideTab} questionQueue={questionQueue} personas={personas}
               speakingPersonaId={speakingPersonaId} ttsEnabled={ttsEnabled}
-              speechMetrics={speechMetrics} prosodyMetrics={prosodyMetrics} chatMessages={chatMessages} chatEndRef={chatEndRef}
+              speechMetrics={speechMetrics} prosodyMetrics={prosodyMetrics} visualMetrics={visualAnalysis.available ? visualAnalysis.metrics : undefined} chatMessages={chatMessages} chatEndRef={chatEndRef}
               onListen={handleListenToQuestion} onRead={handleReadQuestion}
               availableProviders={availableProviders} activeProvider={activeProvider} onProviderChange={setProvider}
               onDismiss={(id) => setQuestionQueue((prev) => prev.filter((q) => q.id !== id))}
@@ -986,7 +1006,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
                   <TabContent
                     sideTab={mobilePanel} questionQueue={questionQueue} personas={personas}
                     speakingPersonaId={speakingPersonaId} ttsEnabled={ttsEnabled}
-                    speechMetrics={speechMetrics} prosodyMetrics={prosodyMetrics} chatMessages={chatMessages} chatEndRef={chatEndRef}
+                    speechMetrics={speechMetrics} prosodyMetrics={prosodyMetrics} visualMetrics={visualAnalysis.available ? visualAnalysis.metrics : undefined} chatMessages={chatMessages} chatEndRef={chatEndRef}
                     onListen={handleListenToQuestion} onRead={handleReadQuestion}
                     onDismiss={(id) => setQuestionQueue((prev) => prev.filter((q) => q.id !== id))}
                     onToggleTTS={() => setTtsEnabled(!ttsEnabled)}
@@ -1024,7 +1044,18 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
                 if (isListening) { stopListening(); stopProsody(); }
                 else { startListening().catch(() => {}); startProsody(); }
               }} />
-              <ToolbarBtn icon="video" active={isCameraActive} color={theme.accentColor} onClick={() => isCameraActive ? stopCamera() : startCamera()} />
+              <ToolbarBtn icon="video" active={isCameraActive} color={theme.accentColor} onClick={() => {
+                if (isCameraActive) {
+                  stopCamera();
+                  visualAnalysis.stop();
+                } else {
+                  startCamera().then(() => {
+                    if (continuousActive && videoElRef.current) {
+                      visualAnalysis.start(videoElRef.current).catch(() => {});
+                    }
+                  });
+                }
+              }} />
               <button
                 onClick={() => setMobilePanel(mobilePanel ? null : "chat")}
                 className="md:hidden w-10 h-10 flex items-center justify-center rounded-full bg-surface-raised text-white/50 relative flex-shrink-0"
@@ -1072,12 +1103,13 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
 }
 
 // === TAB CONTENT (shared by desktop sidebar + mobile bottom sheet) ===
-function TabContent({ sideTab, questionQueue, personas, speakingPersonaId, ttsEnabled, speechMetrics, prosodyMetrics, chatMessages, chatEndRef, availableProviders, activeProvider, onProviderChange, onListen, onRead, onDismiss, onToggleTTS }: {
+function TabContent({ sideTab, questionQueue, personas, speakingPersonaId, ttsEnabled, speechMetrics, prosodyMetrics, visualMetrics, chatMessages, chatEndRef, availableProviders, activeProvider, onProviderChange, onListen, onRead, onDismiss, onToggleTTS }: {
   sideTab: SideTab;
   questionQueue: QueuedQuestion[]; personas: Persona[]; speakingPersonaId: string | null;
   ttsEnabled: boolean;
   speechMetrics: { wordsPerMinute: number; fillerWordCount: number; vocabularyScore: number; longestPause: number };
   prosodyMetrics: { currentVolume: number; averageVolume: number; volumeVariation: number; pitchVariation: number; energyLevel: number; silenceRatio: number };
+  visualMetrics?: { eyeContactPercent: number; expressiveness: number; gestureCount: number; handsVisible: boolean; framing: string };
   chatMessages: { from: string; text: string; time: number }[];
   chatEndRef: React.RefObject<HTMLDivElement | null>;
   availableProviders?: string[]; activeProvider?: string; onProviderChange?: (p: any) => void;
@@ -1101,6 +1133,16 @@ function TabContent({ sideTab, questionQueue, personas, speakingPersonaId, ttsEn
           <Stat label="Energy" value={prosodyMetrics.energyLevel} color="rose" pct={prosodyMetrics.energyLevel} sub={prosodyMetrics.energyLevel < 20 ? "Low energy" : prosodyMetrics.energyLevel > 70 ? "High energy" : "Moderate"} />
           <Stat label="Silence" value={`${prosodyMetrics.silenceRatio}%`} color="gray" sub={prosodyMetrics.silenceRatio > 60 ? "Too many pauses" : "Good pace"} />
         </div>
+
+        {visualMetrics && (
+          <div className="border-t border-white/5 pt-2 mt-2">
+            <div className="text-caption text-white/30 uppercase tracking-wider mb-1">Visual</div>
+            <Stat label="Eye Contact" value={`${visualMetrics.eyeContactPercent}%`} color="emerald" pct={visualMetrics.eyeContactPercent} sub={visualMetrics.eyeContactPercent < 40 ? "Look at camera more" : visualMetrics.eyeContactPercent > 70 ? "Great eye contact" : "Good"} />
+            <Stat label="Expressiveness" value={visualMetrics.expressiveness} color="purple" pct={visualMetrics.expressiveness} sub={visualMetrics.expressiveness < 20 ? "Try smiling more" : visualMetrics.expressiveness > 60 ? "Very expressive" : "Good"} />
+            <Stat label="Gestures" value={visualMetrics.gestureCount} color="blue" sub={visualMetrics.handsVisible ? "Hands visible" : "Hands hidden"} />
+            <Stat label="Framing" value={visualMetrics.framing === "good" ? "Good" : visualMetrics.framing === "too-close" ? "Too close" : visualMetrics.framing === "too-far" ? "Too far" : visualMetrics.framing === "off-center" ? "Off center" : "No face"} color={visualMetrics.framing === "good" ? "emerald" : "orange"} sub={visualMetrics.framing === "good" ? "Well framed" : "Adjust position"} />
+          </div>
+        )}
       </div>
     );
   }
