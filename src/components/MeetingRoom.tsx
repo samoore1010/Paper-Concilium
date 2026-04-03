@@ -132,8 +132,8 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
   const consumeNewText = useElSTT ? elSTT.consumeNewText : webSpeech.consumeNewText;
   const { metrics: speechMetrics, updateMetrics } = useSpeechMetrics();
   const { metrics: prosodyMetrics, isAnalyzing: isProsodyActive, startAnalysis: startProsody, stopAnalysis: stopProsody, getTimeline } = useProsody();
-  const { startRecording, stopRecording, getRecording } = useAudioRecorder();
-  const { speak, stop: stopTTS, isSpeaking, availableProviders, activeProvider, setProvider, debugLog } = useTTS();
+  const { startRecording, stopRecording, getRecording, mixAudioBlob } = useAudioRecorder();
+  const { speak, stop: stopTTS, isSpeaking, availableProviders, activeProvider, setProvider, debugLog } = useTTS({ onAudioBlob: mixAudioBlob });
   const { start: startVAD, stop: stopVAD, onSilenceThreshold } = useVAD(behavior.silenceThresholdMs);
 
   // Check if LLM backend is available on mount
