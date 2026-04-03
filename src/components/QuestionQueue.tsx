@@ -50,10 +50,10 @@ export function QuestionQueue({
       {/* TTS controls */}
       <div className="px-3 py-2 border-b border-white/5 space-y-1.5">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] text-white/40 uppercase tracking-wider">Voice Feedback</span>
+          <span className="text-caption text-white/40 uppercase tracking-wider">Voice Feedback</span>
           <button
             onClick={onToggleTTS}
-            className={`text-[10px] px-2 py-1 rounded transition-colors ${
+            className={`text-caption px-2 py-1 rounded transition-colors ${
               ttsEnabled
                 ? "bg-emerald-500/20 text-emerald-300"
                 : "bg-white/5 text-white/40 hover:text-white/60"
@@ -66,19 +66,19 @@ export function QuestionQueue({
         {/* Provider selector — only shows when TTS is on and multiple providers exist */}
         {ttsEnabled && availableProviders.length > 0 && onProviderChange && (
           <div className="flex items-center gap-1">
-            <span className="text-[9px] text-white/30 mr-1">Voice:</span>
+            <span className="text-caption text-white/30 mr-1">Voice:</span>
             {["auto", ...availableProviders, "browser"].map((p) => (
               <button
                 key={p}
                 onClick={() => onProviderChange(p as TTSProvider)}
-                className={`text-[9px] px-1.5 py-0.5 rounded transition-colors ${
+                className={`text-caption px-1.5 py-0.5 rounded transition-colors ${
                   activeProvider === p
                     ? p === "elevenlabs" ? "bg-purple-500/20 text-purple-300" : "bg-blue-500/20 text-blue-300"
                     : "bg-white/5 text-white/30 hover:text-white/50"
                 }`}
               >
                 {providerLabels[p] || p}
-                {p === "elevenlabs" && <span className="ml-0.5 text-[7px]">PRO</span>}
+                {p === "elevenlabs" && <span className="ml-0.5 text-caption">PRO</span>}
               </button>
             ))}
           </div>
@@ -126,10 +126,10 @@ export function QuestionQueue({
                     />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[11px] font-medium text-white truncate">
+                    <div className="text-label font-medium text-white truncate">
                       {persona.name}
                     </div>
-                    <div className="text-[9px] text-white/30">{persona.communicationStyle}</div>
+                    <div className="text-caption text-white/30">{persona.communicationStyle}</div>
                   </div>
                   {isSpeaking && (
                     <div className="flex gap-0.5 items-end h-3">
@@ -142,7 +142,7 @@ export function QuestionQueue({
                 </div>
 
                 {/* Question text */}
-                <p className="text-[11px] text-white/60 leading-relaxed mb-2 line-clamp-3">
+                <p className="text-label text-white/60 leading-relaxed mb-2 line-clamp-3">
                   "{q.question}"
                 </p>
 
@@ -152,7 +152,7 @@ export function QuestionQueue({
                     <button
                       onClick={() => onListen(q)}
                       disabled={isSpeaking}
-                      className={`flex-1 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
+                      className={`flex-1 px-2 py-1 rounded text-caption font-medium transition-colors ${
                         isSpeaking
                           ? "bg-emerald-500/20 text-emerald-300 cursor-not-allowed"
                           : "bg-blue-500/20 text-blue-300 hover:bg-blue-500/30"
@@ -163,13 +163,13 @@ export function QuestionQueue({
                   )}
                   <button
                     onClick={() => onRead(q)}
-                    className="flex-1 px-2 py-1 rounded text-[10px] font-medium bg-surface-raised text-white/50 hover:bg-surface-overlay hover:text-white/70 transition-colors"
+                    className="flex-1 px-2 py-1 rounded text-caption font-medium bg-surface-raised text-white/50 hover:bg-surface-overlay hover:text-white/70 transition-colors"
                   >
                     Read
                   </button>
                   <button
                     onClick={() => onDismiss(q.id)}
-                    className="px-2 py-1 rounded text-[10px] text-white/30 hover:text-white/50 hover:bg-surface-overlay transition-colors"
+                    className="px-2 py-1 rounded text-caption text-white/30 hover:text-white/50 hover:bg-surface-overlay transition-colors"
                   >
                     Dismiss
                   </button>
@@ -183,7 +183,7 @@ export function QuestionQueue({
       {/* Queue count footer */}
       {questions.length > 0 && (
         <div className="px-3 py-1.5 border-t border-white/5 text-center">
-          <span className="text-[10px] text-white/30">{questions.length} pending</span>
+          <span className="text-caption text-white/30">{questions.length} pending</span>
         </div>
       )}
     </div>

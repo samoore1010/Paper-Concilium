@@ -20,7 +20,7 @@ export function PracticeDashboard({ progress, onSelectLesson, onBack }: Practice
             <button onClick={onBack} className="text-white/40 hover:text-white/70 text-sm">← Back</button>
             <div>
               <h1 className="text-base md:text-lg font-semibold">Practice Mode</h1>
-              <p className="text-[10px] md:text-xs text-white/40">Improve your delivery, one exercise at a time</p>
+              <p className="text-caption md:text-xs text-white/40">Improve your delivery, one exercise at a time</p>
             </div>
           </div>
           {/* Streak */}
@@ -83,8 +83,8 @@ export function PracticeDashboard({ progress, onSelectLesson, onBack }: Practice
                   }`}
                 >
                   <div className="text-2xl mb-1">{ach.icon}</div>
-                  <div className="text-[11px] font-medium">{ach.title}</div>
-                  <div className="text-[9px] text-white/40 mt-0.5">{ach.description}</div>
+                  <div className="text-label font-medium">{ach.title}</div>
+                  <div className="text-caption text-white/40 mt-0.5">{ach.description}</div>
                 </div>
               );
             })}
@@ -102,7 +102,7 @@ function UnitSection({ unit, progress, onSelectLesson }: { unit: Unit; progress:
         <span className="text-2xl">{unit.icon}</span>
         <div>
           <h2 className="text-sm md:text-base font-semibold">{unit.title}</h2>
-          <p className="text-[10px] md:text-xs text-white/40">{unit.description}</p>
+          <p className="text-caption md:text-xs text-white/40">{unit.description}</p>
         </div>
       </div>
 
@@ -130,9 +130,9 @@ function UnitSection({ unit, progress, onSelectLesson }: { unit: Unit; progress:
             >
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs md:text-sm font-medium">{lesson.title}</span>
-                {!isUnlocked && <span className="text-[10px] text-white/30">🔒 {lesson.unlockRequirement}★</span>}
+                {!isUnlocked && <span className="text-caption text-white/30">🔒 {lesson.unlockRequirement}★</span>}
               </div>
-              <p className="text-[10px] md:text-xs text-white/40 mb-2">{lesson.description}</p>
+              <p className="text-caption md:text-xs text-white/40 mb-2">{lesson.description}</p>
 
               {/* Star progress */}
               <div className="flex items-center gap-1">
@@ -142,12 +142,12 @@ function UnitSection({ unit, progress, onSelectLesson }: { unit: Unit; progress:
                   return (
                     <div key={ex.id} className="flex gap-0.5">
                       {[1, 2, 3].map((s) => (
-                        <span key={s} className={`text-[10px] ${s <= stars ? "text-yellow-400" : "text-white/15"}`}>★</span>
+                        <span key={s} className={`text-caption ${s <= stars ? "text-yellow-400" : "text-white/15"}`}>★</span>
                       ))}
                     </div>
                   );
                 })}
-                <span className="text-[9px] text-white/30 ml-auto">{lessonStars}/{maxStars}</span>
+                <span className="text-caption text-white/30 ml-auto">{lessonStars}/{maxStars}</span>
               </div>
             </motion.button>
           );
@@ -163,9 +163,9 @@ function StatCard({ label, value, sub, color }: { label: string; value: string; 
   };
   return (
     <div className="rounded-lg border border-white/5 bg-surface-raised p-2 md:p-3 text-center">
-      <div className="text-[9px] md:text-[10px] text-white/40 mb-0.5">{label}</div>
+      <div className="text-caption text-white/40 mb-0.5">{label}</div>
       <div className={`text-sm md:text-lg font-bold ${colors[color]}`}>{value}</div>
-      <div className="text-[8px] md:text-[9px] text-white/30">{sub}</div>
+      <div className="text-caption text-white/30">{sub}</div>
     </div>
   );
 }

@@ -138,12 +138,12 @@ export function CollectionDashboard({ collection, onBack }: CollectionDashboardP
                     {isUnlocked ? (
                       <>
                         <span className="font-medium text-sm">{persona.name}</span>
-                        <span className="text-[10px] text-white/30 italic">{persona.archetype}</span>
+                        <span className="text-caption text-white/30 italic">{persona.archetype}</span>
                         {stats && stats.masteryTier !== "none" && (
                           <MasteryBadge tier={stats.masteryTier} />
                         )}
                         {stats && (
-                          <span className="text-[10px] text-white/30">
+                          <span className="text-caption text-white/30">
                             {stats.sessionsCompleted} session{stats.sessionsCompleted !== 1 ? "s" : ""}
                           </span>
                         )}
@@ -151,7 +151,7 @@ export function CollectionDashboard({ collection, onBack }: CollectionDashboardP
                     ) : (
                       <>
                         <span className="font-medium text-sm text-white/20">???</span>
-                        <span className="text-[10px] text-white/20">{req.description}</span>
+                        <span className="text-caption text-white/20">{req.description}</span>
                       </>
                     )}
                   </div>
@@ -195,7 +195,7 @@ function StatCard({
       <div className="text-xl font-bold" style={color ? { color } : undefined}>
         {value}
       </div>
-      {sub && <div className="text-[10px] text-white/30">{sub}</div>}
+      {sub && <div className="text-caption text-white/30">{sub}</div>}
     </div>
   );
 }
@@ -203,7 +203,7 @@ function StatCard({
 function MasteryBadge({ tier }: { tier: MasteryTier }) {
   return (
     <span
-      className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+      className="text-caption px-2 py-0.5 rounded-full font-medium"
       style={{
         backgroundColor: `${MASTERY_COLORS[tier]}20`,
         color: MASTERY_COLORS[tier],
@@ -250,17 +250,17 @@ function CharacterDetailModal({
           <div className="grid grid-cols-3 gap-3 mb-6">
             <div className="text-center p-3 rounded-lg bg-surface-raised">
               <div className="text-lg font-bold">{stats.sessionsCompleted}</div>
-              <div className="text-[10px] text-white/40">Sessions</div>
+              <div className="text-caption text-white/40">Sessions</div>
             </div>
             <div className="text-center p-3 rounded-lg bg-surface-raised">
               <div className="text-lg font-bold">{stats.bestScore.toFixed(1)}</div>
-              <div className="text-[10px] text-white/40">Best Score</div>
+              <div className="text-caption text-white/40">Best Score</div>
             </div>
             <div className="text-center p-3 rounded-lg bg-surface-raised">
               <div className="text-lg font-bold">
                 {stats.sessionsCompleted > 0 ? (stats.totalScore / stats.sessionsCompleted).toFixed(1) : "—"}
               </div>
-              <div className="text-[10px] text-white/40">Avg Score</div>
+              <div className="text-caption text-white/40">Avg Score</div>
             </div>
           </div>
         ) : (
@@ -277,7 +277,7 @@ function CharacterDetailModal({
                 Next: <span style={{ color: MASTERY_COLORS[mastery.nextTier] }}>{MASTERY_LABELS[mastery.nextTier]}</span>
               </span>
             </div>
-            <div className="text-[10px] text-white/30 space-y-1">
+            <div className="text-caption text-white/30 space-y-1">
               {mastery.sessionsToNext > 0 && (
                 <div>{mastery.sessionsToNext} more session{mastery.sessionsToNext !== 1 ? "s" : ""} needed</div>
               )}
@@ -309,7 +309,7 @@ function CharacterDetailModal({
                     </span>
                     {isLocked && (
                       <span
-                        className="text-[10px] px-1.5 py-0.5 rounded"
+                        className="text-caption px-1.5 py-0.5 rounded"
                         style={{
                           color: MASTERY_COLORS[entry.requiredTier],
                           backgroundColor: `${MASTERY_COLORS[entry.requiredTier]}15`,

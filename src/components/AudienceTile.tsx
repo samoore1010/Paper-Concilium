@@ -51,9 +51,9 @@ export function AudienceTile({ persona, reaction, reactionEmoji, isActive, isMut
             }}
             className="absolute -top-1 left-1/2 -translate-x-1/2 z-20 w-[85%] max-w-[240px] cursor-pointer group"
           >
-            <div className="bg-white/95 text-gray-900 rounded-xl px-3 py-2 text-[11px] leading-snug shadow-xl shadow-black/40 border border-white/60 group-hover:bg-white group-hover:shadow-2xl transition-all">
+            <div className="bg-white/95 text-gray-900 rounded-xl px-3 py-2 text-label leading-snug shadow-xl shadow-black/40 border border-white/60 group-hover:bg-white group-hover:shadow-2xl transition-all">
               <p className="line-clamp-4 text-left">"{pendingQuestion.question}"</p>
-              <div className="text-[9px] text-blue-600 mt-1 font-semibold flex items-center gap-1">
+              <div className="text-caption text-blue-600 mt-1 font-semibold flex items-center gap-1">
                 <span>🔊</span> Tap to hear
               </div>
             </div>
@@ -102,7 +102,7 @@ export function AudienceTile({ persona, reaction, reactionEmoji, isActive, isMut
         {/* Name bar */}
         <div className="w-full flex items-center justify-between px-2 py-1.5 bg-black/40 text-white text-xs">
           <div className="flex items-center gap-1.5 min-w-0">
-            <span className="truncate font-medium text-[11px]">{persona.name}</span>
+            <span className="truncate font-medium text-label">{persona.name}</span>
             {isSpeaking && (
               <div className="flex gap-0.5 items-end h-3 flex-shrink-0">
                 <span className="w-0.5 bg-cyan-400 rounded-full animate-sound-bar-1" style={{ height: "40%" }} />
@@ -118,7 +118,7 @@ export function AudienceTile({ persona, reaction, reactionEmoji, isActive, isMut
                 <line x1="2" y1="2" x2="14" y2="14" stroke="#ef4444" strokeWidth="2" />
               </svg>
             )}
-            <span className="text-[9px] text-white/40 hidden md:inline">{persona.profession}</span>
+            <span className="text-caption text-white/40 hidden md:inline">{persona.profession}</span>
           </div>
         </div>
 

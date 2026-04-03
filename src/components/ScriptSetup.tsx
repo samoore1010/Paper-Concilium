@@ -162,7 +162,7 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
               placeholder="Paste or type your script here..."
               className="w-full h-48 md:h-64 bg-surface-raised border border-white/5 rounded-xl p-4 text-sm text-white placeholder-white/30 outline-none focus:border-blue-400/50 resize-none"
             />
-            <div className="text-[10px] text-white/30 mt-1">{uploadedText.split(/\s+/).filter(Boolean).length} words</div>
+            <div className="text-caption text-white/30 mt-1">{uploadedText.split(/\s+/).filter(Boolean).length} words</div>
           </motion.div>
         )}
 
@@ -174,7 +174,7 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
                 <label className="text-xs text-white/50">Describe your talk</label>
                 <button
                   onClick={handleSuggestTopic}
-                  className="text-[10px] px-2.5 py-1 rounded-lg bg-purple-500/15 text-purple-300 hover:bg-purple-500/25 transition-colors flex items-center gap-1"
+                  className="text-caption px-2.5 py-1 rounded-lg bg-purple-500/15 text-purple-300 hover:bg-purple-500/25 transition-colors flex items-center gap-1"
                 >
                   <span>🎲</span> Suggest a {getSessionLabel(sessionType)} topic
                 </button>
@@ -218,7 +218,7 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
                   onChange={(e) => setGeneratedText(e.target.value)}
                   className="w-full h-48 md:h-64 bg-surface-raised border border-purple-500/30 rounded-xl p-4 text-sm text-white outline-none resize-none"
                 />
-                <div className="text-[10px] text-white/30 mt-1">{generatedText.split(/\s+/).filter(Boolean).length} words · ~{Math.round(generatedText.split(/\s+/).filter(Boolean).length / 130)} min</div>
+                <div className="text-caption text-white/30 mt-1">{generatedText.split(/\s+/).filter(Boolean).length} words · ~{Math.round(generatedText.split(/\s+/).filter(Boolean).length / 130)} min</div>
               </motion.div>
             )}
           </motion.div>
@@ -250,7 +250,7 @@ function ModeButton({ selected, onClick, icon, title, description }: {
     >
       <div className="text-2xl mb-2">{icon}</div>
       <div className="text-sm font-medium mb-0.5">{title}</div>
-      <div className="text-[10px] text-white/40">{description}</div>
+      <div className="text-caption text-white/40">{description}</div>
     </button>
   );
 }
