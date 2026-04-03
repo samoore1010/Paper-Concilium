@@ -191,12 +191,12 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
           </div>
 
           {/* Pack Tabs with slide animation */}
-          <div className="flex gap-3 mb-6 overflow-x-auto pb-1">
+          <div className="grid grid-cols-1 md:flex md:flex-wrap gap-2 md:gap-3 mb-6">
             {PERSONA_PACKS.map((pack) => (
               <button
                 key={pack.id}
                 onClick={() => handlePackChange(pack.id)}
-                className={`flex-shrink-0 text-left p-4 rounded-lg border transition-all min-w-[200px] ${
+                className={`text-left p-4 rounded-lg border transition-all md:flex-1 md:min-w-[250px] ${
                   activePack === pack.id
                     ? "border-blue-400 bg-blue-500/10"
                     : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"
