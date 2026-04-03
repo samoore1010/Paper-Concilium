@@ -1,9 +1,25 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 
+export interface SourceContext {
+  fileCount: number;
+  filenames: string[];
+  totalChars: number;
+  summary: string;
+  combinedText: string;
+}
+
 export interface ScriptConfig {
-  mode: "none" | "uploaded" | "generated";
+  mode: "none" | "uploaded" | "generated" | "materials";
   text: string;
+  sourceContext?: SourceContext;
+}
+
+interface ExtractedFile {
+  filename: string;
+  type: string;
+  text: string;
+  pageCount?: number;
 }
 
 interface ScriptSetupProps {
@@ -71,13 +87,26 @@ function getSessionLabel(sessionType: string): string {
   return labels[sessionType] || sessionType.replace(/-/g, " ");
 }
 
+const ACCEPTED_EXTENSIONS = ".pdf,.docx,.pptx,.txt,.md";
+const MAX_FILES = 5;
+
 export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProps) {
-  const [mode, setMode] = useState<"none" | "upload" | "generate">("none");
+  const [mode, setMode] = useState<"none" | "upload" | "generate" | "materials">("none");
   const [uploadedText, setUploadedText] = useState("");
   const [description, setDescription] = useState("");
   const [duration, setDuration] = useState(3);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedText, setGeneratedText] = useState("");
+
+  // Materials mode state
+  const [materialFiles, setMaterialFiles] = useState<File[]>([]);
+  const [extractedFiles, setExtractedFiles] = useState<ExtractedFile[]>([]);
+  const [materialsText, setMaterialsText] = useState("");
+  const [sourceContext, setSourceContext] = useState<SourceContext | null>(null);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleGenerate = async () => {
     if (!description.trim()) return;
@@ -105,11 +134,74 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
     setDescription(topic);
   }, [sessionType, description]);
 
+  const handleFilesSelected = async (files: FileList | File[]) => {
+    const fileArray = Array.from(files).slice(0, MAX_FILES);
+    if (fileArray.length === 0) return;
+
+    setMaterialFiles(fileArray);
+    setIsExtracting(true);
+    setExtractError(null);
+    setExtractedFiles([]);
+    setMaterialsText("");
+    setSourceContext(null);
+
+    const formData = new FormData();
+    fileArray.forEach((f) => formData.append("files", f));
+
+    try {
+      const res = await fetch("/api/extract-materials", {
+        method: "POST",
+        body: formData,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setExtractedFiles(data.extracted || []);
+        setMaterialsText(data.combinedText || "");
+        setSourceContext({
+          ...data.sourceContext,
+          combinedText: data.combinedText,
+        });
+        if (data.errors?.length > 0) {
+          setExtractError(`Some files failed: ${data.errors.map((e: { filename: string }) => e.filename).join(", ")}`);
+        }
+      } else {
+        const err = await res.json().catch(() => ({ error: "Extraction failed" }));
+        setExtractError(err.error || "Failed to extract materials");
+      }
+    } catch {
+      setExtractError("Failed to connect to server.");
+    }
+    setIsExtracting(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (e.dataTransfer.files.length > 0) {
+      handleFilesSelected(e.dataTransfer.files);
+    }
+  };
+
+  const handleRemoveFile = (index: number) => {
+    const updated = materialFiles.filter((_, i) => i !== index);
+    setMaterialFiles(updated);
+    if (updated.length === 0) {
+      setExtractedFiles([]);
+      setMaterialsText("");
+      setSourceContext(null);
+    } else {
+      // Re-extract with remaining files
+      handleFilesSelected(updated);
+    }
+  };
+
   const handleContinue = () => {
     if (mode === "upload" && uploadedText.trim()) {
       onContinue({ mode: "uploaded", text: uploadedText.trim() });
     } else if (mode === "generate" && generatedText.trim()) {
       onContinue({ mode: "generated", text: generatedText.trim() });
+    } else if (mode === "materials" && materialsText.trim() && sourceContext) {
+      onContinue({ mode: "materials", text: materialsText.trim(), sourceContext });
     } else {
       onContinue({ mode: "none", text: "" });
     }
@@ -129,7 +221,7 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
         <p className="text-xs md:text-sm text-white/50 mb-6">Would you like to use a teleprompter during your session?</p>
 
         {/* Mode selection */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           <ModeButton
             selected={mode === "none"}
             onClick={() => setMode("none")}
@@ -150,6 +242,13 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
             icon="✨"
             title="Generate Script"
             description="AI writes a script from your description"
+          />
+          <ModeButton
+            selected={mode === "materials"}
+            onClick={() => setMode("materials")}
+            icon="📚"
+            title="From My Materials"
+            description="Upload docs, slides, or notes"
           />
         </div>
 
@@ -224,11 +323,127 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
           </motion.div>
         )}
 
+        {/* Materials mode */}
+        {mode === "materials" && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+            {/* Drop zone / file picker */}
+            {extractedFiles.length === 0 && !isExtracting && (
+              <div
+                onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                onDragLeave={() => setIsDragOver(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
+                  isDragOver
+                    ? "border-emerald-400 bg-emerald-500/10"
+                    : "border-white/10 hover:border-white/20 bg-surface-raised"
+                }`}
+              >
+                <div className="text-3xl mb-3">📁</div>
+                <div className="text-sm font-medium mb-1">Drop files here or click to browse</div>
+                <div className="text-caption text-white/40">
+                  PDF, DOCX, PPTX, TXT, Markdown — up to {MAX_FILES} files, 10MB each
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={ACCEPTED_EXTENSIONS}
+                  multiple
+                  className="hidden"
+                  onChange={(e) => e.target.files && handleFilesSelected(e.target.files)}
+                />
+              </div>
+            )}
+
+            {/* Extracting spinner */}
+            {isExtracting && (
+              <div className="flex items-center justify-center gap-3 py-8 text-white/50">
+                <motion.div
+                  className="w-5 h-5 border-2 border-white/20 border-t-emerald-400 rounded-full"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                />
+                <span className="text-sm">Extracting content from {materialFiles.length} file(s)...</span>
+              </div>
+            )}
+
+            {/* Error display */}
+            {extractError && (
+              <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                {extractError}
+              </div>
+            )}
+
+            {/* File list + extracted preview */}
+            {extractedFiles.length > 0 && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-xs text-white/50">Uploaded Files</label>
+                  {extractedFiles.map((f, i) => (
+                    <div key={i} className="flex items-center gap-3 bg-surface-raised border border-white/5 rounded-lg px-3 py-2">
+                      <span className="text-lg">
+                        {f.type === "pdf" ? "📕" : f.type === "docx" ? "📘" : f.type === "pptx" ? "📙" : "📄"}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm truncate">{f.filename}</div>
+                        <div className="text-caption text-white/30">
+                          {f.text.split(/\s+/).filter(Boolean).length} words
+                          {f.pageCount ? ` · ${f.pageCount} pages` : ""}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveFile(i)}
+                        className="text-white/30 hover:text-red-400 text-sm px-1"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  {materialFiles.length < MAX_FILES && (
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-caption text-emerald-400 hover:text-emerald-300 transition-colors"
+                    >
+                      + Add more files
+                    </button>
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={ACCEPTED_EXTENSIONS}
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files) {
+                        const combined = [...materialFiles, ...Array.from(e.target.files)].slice(0, MAX_FILES);
+                        handleFilesSelected(combined);
+                      }
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-white/50 mb-1 block">Extracted Content (you can edit before starting)</label>
+                  <textarea
+                    value={materialsText}
+                    onChange={(e) => setMaterialsText(e.target.value)}
+                    className="w-full h-48 md:h-64 bg-surface-raised border border-emerald-500/30 rounded-xl p-4 text-sm text-white outline-none resize-none"
+                  />
+                  <div className="text-caption text-white/30 mt-1">
+                    {materialsText.split(/\s+/).filter(Boolean).length} words · ~{Math.round(materialsText.split(/\s+/).filter(Boolean).length / 130)} min
+                  </div>
+                </div>
+              </>
+            )}
+          </motion.div>
+        )}
+
         {/* Continue button */}
         <div className="mt-8 flex justify-end">
           <button
             onClick={handleContinue}
-            className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 rounded-xl text-sm font-medium"
+            disabled={mode === "materials" && (!materialsText.trim() || isExtracting)}
+            className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-40 rounded-xl text-sm font-medium"
           >
             {mode === "none" ? "Start Without Script" : "Start With Teleprompter"}
           </button>
