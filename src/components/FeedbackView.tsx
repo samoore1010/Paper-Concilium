@@ -70,7 +70,7 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
         {tab === "feedback" && (
           <>
             {/* Summary — responsive grid */}
-            <div className="grid grid-cols-3 gap-2 md:gap-4 mb-6 md:mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 md:gap-4 mb-6 md:mb-8">
               <div className={`rounded-lg border p-3 md:p-4 ${scoreBg(avgScore)}`}>
                 <div className="text-[10px] md:text-xs text-white/50 mb-0.5">Score</div>
                 <div className={`text-xl md:text-3xl font-bold ${scoreColor(avgScore)}`}>{avgScore}</div>
@@ -92,7 +92,7 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
             {prosody && (
               <div className="rounded-lg border border-white/5 bg-surface-raised p-4 md:p-5 mb-6 md:mb-8">
                 <h3 className="text-xs md:text-sm font-medium text-white/70 mb-3">Delivery Analysis</h3>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
                   <DeliveryStat label="Volume" value={prosody.averageVolume} unit="%" advice={prosody.averageVolume < 20 ? "Speak louder" : prosody.averageVolume > 80 ? "Too loud" : "Good"} />
                   <DeliveryStat label="Volume Dynamics" value={prosody.volumeVariation} unit="%" advice={prosody.volumeVariation < 15 ? "Too monotone" : "Good variety"} />
                   <DeliveryStat label="Pitch Variety" value={prosody.pitchVariation} unit="%" advice={prosody.pitchVariation < 10 ? "Monotone" : "Expressive"} />
