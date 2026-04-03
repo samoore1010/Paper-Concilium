@@ -808,12 +808,12 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
         <video ref={attachVideo} autoPlay playsInline muted className="w-full h-full object-cover mirror" />
       ) : (
         <div className="w-full h-full flex items-center justify-center">
-          <span className="text-[10px] text-white/30">Camera Off</span>
+          <span className="text-caption text-white/30">Camera Off</span>
         </div>
       )}
       <div className="absolute bottom-0 left-0 right-0 px-1.5 py-0.5 bg-gradient-to-t from-black/80 to-transparent flex items-center justify-between">
-        <span className="text-[9px] text-white/80 font-medium">You</span>
-        {isCameraActive && <span className="text-[8px] px-1 rounded bg-green-500/30 text-green-300">Live</span>}
+        <span className="text-caption text-white/80 font-medium">You</span>
+        {isCameraActive && <span className="text-caption px-1 rounded bg-green-500/30 text-green-300">Live</span>}
       </div>
     </div>
   );
@@ -870,12 +870,12 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: theme.accentColor }} />
             <span className="text-xs font-medium truncate max-w-[120px] md:max-w-none">{theme.label}</span>
-            <span className="text-[10px] text-white/40 font-mono cursor-pointer" onClick={() => setShowDebug(!showDebug)}>{fmt(elapsed)}</span>
+            <span className="text-caption text-white/40 font-mono cursor-pointer" onClick={() => setShowDebug(!showDebug)}>{fmt(elapsed)}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-white/40 hidden sm:inline">{personas.length} audience</span>
-            <button onClick={onBack} className="text-[10px] text-white/40 hover:text-white/70 px-1.5 py-1 hidden sm:block">Back</button>
-            <button onClick={handleEndSession} disabled={isEnding} className="px-2.5 md:px-4 py-1 md:py-1.5 bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed rounded text-[11px] md:text-sm font-medium">
+            <span className="text-caption text-white/40 hidden sm:inline">{personas.length} audience</span>
+            <button onClick={onBack} className="text-caption text-white/40 hover:text-white/70 px-1.5 py-1 hidden sm:block">Back</button>
+            <button onClick={handleEndSession} disabled={isEnding} className="px-2.5 md:px-4 py-1 md:py-1.5 bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed rounded text-label md:text-sm font-medium">
               {isEnding ? "Ending..." : "End"}
             </button>
           </div>
@@ -883,7 +883,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
 
         {/* Debug panel — tap timer 3x to toggle */}
         {showDebug && (
-          <div className="bg-black/90 text-[9px] text-green-400 font-mono px-2 py-1 max-h-[120px] overflow-y-auto flex-shrink-0">
+          <div className="bg-black/90 text-caption text-green-400 font-mono px-2 py-1 max-h-[120px] overflow-y-auto flex-shrink-0">
             {debugLog.slice(-10).map((l, i) => <div key={i}>{l}</div>)}
             <button onClick={() => setShowDebug(false)} className="text-red-400 mt-1">Close Debug</button>
           </div>
@@ -930,7 +930,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
                 >
                   {tab === "questions" ? "Q&A" : tab.charAt(0).toUpperCase() + tab.slice(1)}
                   {tab === "questions" && questionQueue.length > 0 && (
-                    <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-red-500 text-[9px] flex items-center justify-center font-bold">{questionQueue.length}</span>
+                    <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-red-500 text-caption flex items-center justify-center font-bold">{questionQueue.length}</span>
                   )}
                 </button>
               ))}
@@ -976,7 +976,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
                     >
                       {tab === "questions" ? "Q&A" : tab.charAt(0).toUpperCase() + tab.slice(1)}
                       {tab === "questions" && questionQueue.length > 0 && (
-                        <span className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full bg-red-500 text-[8px] flex items-center justify-center font-bold">{questionQueue.length}</span>
+                        <span className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full bg-red-500 text-caption flex items-center justify-center font-bold">{questionQueue.length}</span>
                       )}
                     </button>
                   ))}
@@ -1002,14 +1002,14 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
           {continuousActive && (
             <div className="px-3 py-1 border-b border-white/5 flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
-              <span className="text-[11px] text-white/40 truncate flex-1">
+              <span className="text-label text-white/40 truncate flex-1">
                 {interimTranscript ? (
                   <span className="text-white/60 italic">{interimTranscript}</span>
                 ) : "Listening..."}
               </span>
               <button
                 onClick={stopContinuousMode}
-                className="px-2 py-0.5 bg-red-500/20 text-red-300 rounded text-[10px] font-medium flex-shrink-0"
+                className="px-2 py-0.5 bg-red-500/20 text-red-300 rounded text-caption font-medium flex-shrink-0"
               >
                 Stop
               </button>
@@ -1086,14 +1086,14 @@ function TabContent({ sideTab, questionQueue, personas, speakingPersonaId, ttsEn
   if (sideTab === "coach") {
     return (
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 text-xs">
-        <div className="text-[10px] text-white/30 uppercase tracking-wider mb-1">Content</div>
+        <div className="text-caption text-white/30 uppercase tracking-wider mb-1">Content</div>
         <Stat label="WPM" value={speechMetrics.wordsPerMinute} color="blue" pct={Math.min(100, (speechMetrics.wordsPerMinute / 150) * 100)} />
         <Stat label="Filler Words" value={speechMetrics.fillerWordCount} color="orange" sub={speechMetrics.fillerWordCount > 5 ? "Try to reduce" : "Good"} />
         <Stat label="Vocabulary" value={speechMetrics.vocabularyScore} color="emerald" pct={speechMetrics.vocabularyScore} />
         <Stat label="Longest Pause" value={`${speechMetrics.longestPause.toFixed(1)}s`} color="yellow" sub={speechMetrics.longestPause > 3 ? "Take more pauses" : "Steady pace"} />
 
         <div className="border-t border-white/5 pt-2 mt-2">
-          <div className="text-[10px] text-white/30 uppercase tracking-wider mb-1">Delivery</div>
+          <div className="text-caption text-white/30 uppercase tracking-wider mb-1">Delivery</div>
           <Stat label="Volume" value={prosodyMetrics.averageVolume} color="cyan" pct={prosodyMetrics.averageVolume} sub={prosodyMetrics.averageVolume < 20 ? "Speak louder" : prosodyMetrics.averageVolume > 80 ? "Very loud" : "Good projection"} />
           <Stat label="Volume Dynamics" value={prosodyMetrics.volumeVariation} color="cyan" pct={prosodyMetrics.volumeVariation} sub={prosodyMetrics.volumeVariation < 15 ? "Too monotone" : "Good variation"} />
           <Stat label="Pitch Variety" value={prosodyMetrics.pitchVariation} color="purple" pct={prosodyMetrics.pitchVariation} sub={prosodyMetrics.pitchVariation < 10 ? "Monotone" : "Expressive"} />
@@ -1130,14 +1130,14 @@ function Stat({ label, value, color, pct, sub }: { label: string; value: number 
   const bgMap: Record<string, string> = { blue: "bg-blue-400", orange: "bg-orange-400", emerald: "bg-emerald-400", yellow: "bg-yellow-400", cyan: "bg-cyan-400", purple: "bg-purple-400", rose: "bg-rose-400", gray: "bg-gray-400" };
   return (
     <div>
-      <div className="text-white/50 mb-0.5 text-[11px]">{label}</div>
+      <div className="text-white/50 mb-0.5 text-label">{label}</div>
       <div className={`text-base font-bold ${colorMap[color]}`}>{value}</div>
       {pct !== undefined && (
         <div className="w-full h-1 rounded-full bg-white/10 mt-1 overflow-hidden">
           <div className={`h-full ${bgMap[color]}`} style={{ width: `${pct}%` }} />
         </div>
       )}
-      {sub && <div className="text-white/30 text-[10px] mt-0.5">{sub}</div>}
+      {sub && <div className="text-white/30 text-caption mt-0.5">{sub}</div>}
     </div>
   );
 }

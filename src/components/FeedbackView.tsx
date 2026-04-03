@@ -44,7 +44,7 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div>
             <h1 className="text-base md:text-lg font-semibold">Session Feedback</h1>
-            <p className="text-[11px] md:text-xs text-white/40">Review critiques from your audience</p>
+            <p className="text-label md:text-xs text-white/40">Review critiques from your audience</p>
           </div>
           <button onClick={onNewSession} className="px-3 md:px-4 py-1.5 md:py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-xs md:text-sm font-medium">
             New Session
@@ -73,19 +73,19 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
             {/* Summary — responsive grid */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 md:gap-4 mb-6 md:mb-8">
               <div className={`rounded-lg border p-3 md:p-4 ${scoreBg(avgScore)}`}>
-                <div className="text-[10px] md:text-xs text-white/50 mb-0.5">Score</div>
+                <div className="text-caption md:text-xs text-white/50 mb-0.5">Score</div>
                 <div className={`text-xl md:text-3xl font-bold ${scoreColor(avgScore)}`}>{avgScore}</div>
-                <div className="text-[10px] text-white/30">out of 10</div>
+                <div className="text-caption text-white/30">out of 10</div>
               </div>
               <div className="rounded-lg border border-white/5 bg-surface-raised p-3 md:p-4">
-                <div className="text-[10px] md:text-xs text-white/50 mb-0.5">Audience</div>
+                <div className="text-caption md:text-xs text-white/50 mb-0.5">Audience</div>
                 <div className="text-xl md:text-3xl font-bold">{feedback.length}</div>
-                <div className="text-[10px] text-white/30">personas</div>
+                <div className="text-caption text-white/30">personas</div>
               </div>
               <div className="rounded-lg border border-white/5 bg-surface-raised p-3 md:p-4">
-                <div className="text-[10px] md:text-xs text-white/50 mb-0.5">Words</div>
+                <div className="text-caption md:text-xs text-white/50 mb-0.5">Words</div>
                 <div className="text-xl md:text-3xl font-bold">{transcript.split(/\s+/).filter(Boolean).length}</div>
-                <div className="text-[10px] text-white/30">spoken</div>
+                <div className="text-caption text-white/30">spoken</div>
               </div>
             </div>
 
@@ -127,7 +127,7 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
                         <MiiAvatar persona={p} size={36} />
                         <div className="min-w-0">
                           <div className="text-xs md:text-sm font-medium truncate max-w-[80px] md:max-w-none">{p.name}</div>
-                          <div className={`text-[11px] font-bold ${scoreColor(fb.overallScore)}`}>{fb.overallScore}/10</div>
+                          <div className={`text-label font-bold ${scoreColor(fb.overallScore)}`}>{fb.overallScore}/10</div>
                         </div>
                       </button>
                     );
@@ -147,9 +147,9 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
                       <h2 className="text-base md:text-xl font-semibold mb-1">{persona.name}</h2>
                       <p className="text-xs md:text-sm text-white/50 mb-2 line-clamp-2">{persona.bio}</p>
                       <div className="flex flex-wrap gap-1.5">
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300">{persona.profession}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300">{persona.politicalLeaning}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-300">{persona.communicationStyle}</span>
+                        <span className="text-caption px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300">{persona.profession}</span>
+                        <span className="text-caption px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300">{persona.politicalLeaning}</span>
+                        <span className="text-caption px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-300">{persona.communicationStyle}</span>
                       </div>
                     </div>
                   </div>
@@ -160,7 +160,7 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
                       <div className={`text-3xl md:text-4xl font-bold ${scoreColor(selected.overallScore)}`}>{selected.overallScore}</div>
                       <div>
                         <div className="text-xs md:text-sm font-medium">Overall Impression</div>
-                        <div className="text-[11px] md:text-xs text-white/50">{selected.emotionalResponse}</div>
+                        <div className="text-label md:text-xs text-white/50">{selected.emotionalResponse}</div>
                       </div>
                     </div>
                     <div className="w-full h-1.5 md:h-2 rounded-full bg-white/10 overflow-hidden">
@@ -202,7 +202,7 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
                   <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-4 md:p-5">
                     <h3 className="text-xs md:text-sm font-medium text-blue-400 mb-1.5 md:mb-2">Suggestion</h3>
                     <p className="text-xs md:text-sm text-white/60 leading-relaxed italic">"{selected.suggestion}"</p>
-                    <p className="text-[10px] md:text-xs text-white/30 mt-1.5 md:mt-2">— {persona.name}, {persona.profession}</p>
+                    <p className="text-caption md:text-xs text-white/30 mt-1.5 md:mt-2">— {persona.name}, {persona.profession}</p>
                   </div>
                 </div>
               )}
@@ -246,19 +246,19 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
                       <div className="flex items-start justify-between mb-2 md:mb-3">
                         <div>
                           <div className="text-xs md:text-sm font-medium mb-0.5">{session.sessionType.replace(/-/g, " ")}</div>
-                          <div className="text-[10px] md:text-xs text-white/50">
+                          <div className="text-caption md:text-xs text-white/50">
                             {new Date(session.date).toLocaleDateString()} at {new Date(session.date).toLocaleTimeString()}
                           </div>
                         </div>
                         <div className={`text-lg md:text-2xl font-bold ${scoreColor(avg)}`}>{avg.toFixed(1)}</div>
                       </div>
-                      <div className="grid grid-cols-4 gap-1.5 md:gap-2 text-[10px] md:text-xs">
+                      <div className="grid grid-cols-4 gap-1.5 md:gap-2 text-caption md:text-xs">
                         <div className="bg-white/5 rounded px-2 py-1"><div className="text-white/50">Personas</div><div className="font-medium">{session.personaIds.length}</div></div>
                         <div className="bg-white/5 rounded px-2 py-1"><div className="text-white/50">Words</div><div className="font-medium">{session.wordCount}</div></div>
                         <div className="bg-white/5 rounded px-2 py-1"><div className="text-white/50">Duration</div><div className="font-medium">{Math.floor(session.duration / 60)}m</div></div>
                         <div className="bg-white/5 rounded px-2 py-1"><div className="text-white/50">WPM</div><div className="font-medium">{session.speechMetrics.wordsPerMinute}</div></div>
                       </div>
-                      {session.feedback && <div className="text-[10px] text-blue-400 mt-2">Click to view full report</div>}
+                      {session.feedback && <div className="text-caption text-blue-400 mt-2">Click to view full report</div>}
                     </button>
                   );
                 })}
@@ -276,12 +276,12 @@ function DeliveryStat({ label, value, unit, advice }: { label: string; value: nu
   const barColor = value < 20 ? "bg-red-400" : value > 70 ? "bg-emerald-400" : "bg-yellow-400";
   return (
     <div className="bg-surface-raised rounded-lg p-3">
-      <div className="text-[10px] text-white/50 mb-1">{label}</div>
+      <div className="text-caption text-white/50 mb-1">{label}</div>
       <div className={`text-lg font-bold ${color}`}>{value}{unit}</div>
       <div className="w-full h-1 rounded-full bg-white/10 mt-1 overflow-hidden">
         <div className={`h-full ${barColor}`} style={{ width: `${Math.min(100, value)}%` }} />
       </div>
-      <div className="text-[9px] text-white/30 mt-1">{advice}</div>
+      <div className="text-caption text-white/30 mt-1">{advice}</div>
     </div>
   );
 }

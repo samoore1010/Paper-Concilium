@@ -96,7 +96,7 @@ export function ExerciseView({ lessonId, onComplete, onBack }: ExerciseViewProps
         <button onClick={onBack} className="text-white/40 hover:text-white/70 text-sm">← Exit</button>
         <div className="text-center">
           <div className="text-xs font-medium">{lesson.lesson.title}</div>
-          <div className="text-[10px] text-white/40">{currentIdx + 1} of {exercises.length}</div>
+          <div className="text-caption text-white/40">{currentIdx + 1} of {exercises.length}</div>
         </div>
         <div className="text-xs text-white/40 font-mono">{fmt(elapsed)}</div>
       </header>
@@ -113,7 +113,7 @@ export function ExerciseView({ lessonId, onComplete, onBack }: ExerciseViewProps
           <h2 className="text-lg md:text-xl font-semibold mb-1">{currentExercise.title}</h2>
           <p className="text-xs md:text-sm text-white/50">{currentExercise.instruction}</p>
           {currentExercise.targets.wpmRange && (
-            <div className="mt-2 text-[10px] text-white/30">Target: {currentExercise.targets.wpmRange[0]}-{currentExercise.targets.wpmRange[1]} WPM</div>
+            <div className="mt-2 text-caption text-white/30">Target: {currentExercise.targets.wpmRange[0]}-{currentExercise.targets.wpmRange[1]} WPM</div>
           )}
         </div>
 
@@ -198,14 +198,14 @@ function ScoreDisplay({ score, exercise, isLast, onNext, onRetry }: {
       <div className="space-y-2 text-left mb-6">
         {score.breakdown.map((b) => (
           <div key={b.metric} className="flex items-center gap-3">
-            <div className="w-16 text-[10px] text-white/40">{b.metric}</div>
+            <div className="w-16 text-caption text-white/40">{b.metric}</div>
             <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
               <div
                 className={`h-full rounded-full ${b.score >= 80 ? "bg-emerald-400" : b.score >= 50 ? "bg-yellow-400" : "bg-red-400"}`}
                 style={{ width: `${b.score}%` }}
               />
             </div>
-            <div className="w-8 text-[10px] text-right">{b.score}</div>
+            <div className="w-8 text-caption text-right">{b.score}</div>
           </div>
         ))}
       </div>
@@ -213,7 +213,7 @@ function ScoreDisplay({ score, exercise, isLast, onNext, onRetry }: {
       {/* Feedback */}
       <div className="text-left space-y-1 mb-6">
         {score.breakdown.map((b) => (
-          <p key={b.metric} className="text-[11px] text-white/50">
+          <p key={b.metric} className="text-label text-white/50">
             <span className="text-white/70 font-medium">{b.metric}:</span> {b.feedback}
           </p>
         ))}
@@ -242,7 +242,7 @@ function LiveMetric({ label, value, target, bad }: { label: string; value: numbe
 
   return (
     <div className="bg-surface-raised rounded-lg p-2">
-      <div className="text-[9px] text-white/40">{label}</div>
+      <div className="text-caption text-white/40">{label}</div>
       <div className={`text-sm font-bold ${color}`}>{value}</div>
     </div>
   );

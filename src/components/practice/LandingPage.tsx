@@ -32,9 +32,9 @@ export function LandingPage({ onSelectMode }: LandingPageProps) {
               Guided exercises to improve your speaking skills. Read scripts, get scored on delivery, earn XP, and level up.
             </p>
             <div className="flex flex-wrap gap-2">
-              <span className="text-[10px] px-2 py-1 rounded-full bg-purple-500/20 text-purple-300">Guided Scripts</span>
-              <span className="text-[10px] px-2 py-1 rounded-full bg-purple-500/20 text-purple-300">Delivery Scoring</span>
-              <span className="text-[10px] px-2 py-1 rounded-full bg-purple-500/20 text-purple-300">XP & Levels</span>
+              <span className="text-caption px-2 py-1 rounded-full bg-purple-500/20 text-purple-300">Guided Scripts</span>
+              <span className="text-caption px-2 py-1 rounded-full bg-purple-500/20 text-purple-300">Delivery Scoring</span>
+              <span className="text-caption px-2 py-1 rounded-full bg-purple-500/20 text-purple-300">XP & Levels</span>
             </div>
             <div className="absolute top-4 right-4 text-xs text-purple-400 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
               Start Training →
@@ -54,9 +54,9 @@ export function LandingPage({ onSelectMode }: LandingPageProps) {
               Present your own content to an AI audience. Get persona-driven feedback on your pitch, speech, or argument.
             </p>
             <div className="flex flex-wrap gap-2">
-              <span className="text-[10px] px-2 py-1 rounded-full bg-blue-500/20 text-blue-300">AI Audience</span>
-              <span className="text-[10px] px-2 py-1 rounded-full bg-blue-500/20 text-blue-300">Live Reactions</span>
-              <span className="text-[10px] px-2 py-1 rounded-full bg-blue-500/20 text-blue-300">Detailed Feedback</span>
+              <span className="text-caption px-2 py-1 rounded-full bg-blue-500/20 text-blue-300">AI Audience</span>
+              <span className="text-caption px-2 py-1 rounded-full bg-blue-500/20 text-blue-300">Live Reactions</span>
+              <span className="text-caption px-2 py-1 rounded-full bg-blue-500/20 text-blue-300">Detailed Feedback</span>
             </div>
             <div className="absolute top-4 right-4 text-xs text-blue-400 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
               Start Presenting →

@@ -192,12 +192,12 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
 
       {/* Metric selector */}
       <div className="flex items-center gap-2">
-        <span className="text-[10px] text-white/40">Show:</span>
+        <span className="text-caption text-white/40">Show:</span>
         {(["volume", "pitch", "energy"] as const).map((m) => (
           <button
             key={m}
             onClick={() => setActiveMetric(m)}
-            className={`text-[10px] px-2 py-1 rounded transition-colors ${
+            className={`text-caption px-2 py-1 rounded transition-colors ${
               activeMetric === m
                 ? m === "volume" ? "bg-indigo-500/20 text-indigo-300"
                 : m === "pitch" ? "bg-amber-500/20 text-amber-300"
@@ -219,8 +219,8 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
           onClick={seekTo}
         />
         {/* Time labels */}
-        <div className="absolute bottom-1 left-2 text-[9px] text-white/30">{formatTime(currentTime)}</div>
-        <div className="absolute bottom-1 right-2 text-[9px] text-white/30">{formatTime(duration)}</div>
+        <div className="absolute bottom-1 left-2 text-caption text-white/30">{formatTime(currentTime)}</div>
+        <div className="absolute bottom-1 right-2 text-caption text-white/30">{formatTime(duration)}</div>
       </div>
 
       {/* Controls */}
@@ -232,7 +232,7 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
           {isPlaying ? "⏸" : "▶"}
         </button>
         <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-white/40">Speed:</span>
+          <span className="text-caption text-white/40">Speed:</span>
           {[0.5, 1, 1.5, 2].map((s) => (
             <button
               key={s}
@@ -240,7 +240,7 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
                 setPlaybackSpeed(s);
                 if (audioRef.current) audioRef.current.playbackRate = s;
               }}
-              className={`text-[10px] px-1.5 py-0.5 rounded ${playbackSpeed === s ? "bg-blue-500/20 text-blue-300" : "bg-white/5 text-white/40"}`}
+              className={`text-caption px-1.5 py-0.5 rounded ${playbackSpeed === s ? "bg-blue-500/20 text-blue-300" : "bg-white/5 text-white/40"}`}
             >
               {s}x
             </button>
@@ -251,7 +251,7 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
       {/* Event markers list */}
       {events.length > 0 && (
         <div className="space-y-1">
-          <div className="text-[10px] text-white/40 uppercase tracking-wider">Session Events</div>
+          <div className="text-caption text-white/40 uppercase tracking-wider">Session Events</div>
           <div className="max-h-[200px] overflow-y-auto scroll-touch space-y-1">
             {events.map((evt, i) => {
               const isActive = Math.abs(evt.time - currentTime) < 2;
@@ -266,12 +266,12 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
                       setCurrentTime(evt.time);
                     }
                   }}
-                  className={`w-full text-left flex items-center gap-2 px-2 py-1 rounded text-[11px] transition-colors ${
+                  className={`w-full text-left flex items-center gap-2 px-2 py-1 rounded text-label transition-colors ${
                     isActive ? "bg-surface-overlay" : "bg-surface-raised hover:bg-surface-overlay"
                   }`}
                 >
                   <span className="text-xs">{icons[evt.type] || "📌"}</span>
-                  <span className="text-white/30 font-mono text-[10px] w-10">{formatTime(evt.time)}</span>
+                  <span className="text-white/30 font-mono text-caption w-10">{formatTime(evt.time)}</span>
                   <span className={colors[evt.severity]}>{evt.label}</span>
                 </button>
               );
@@ -290,7 +290,7 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
             </div>
             <div>
               <div className="text-sm font-medium">{coachingReport.overallRating} Delivery</div>
-              <div className="text-[10px] text-white/40">Based on pitch, volume, pace, pauses, and filler word analysis</div>
+              <div className="text-caption text-white/40">Based on pitch, volume, pace, pauses, and filler word analysis</div>
             </div>
           </div>
 
@@ -341,19 +341,19 @@ function CoachingCard({ title, rating, advice, stats, className }: {
     <div className={`rounded-xl border border-white/5 bg-surface-raised p-4 ${className || ""}`}>
       <div className="flex items-center justify-between mb-2">
         <h4 className="text-xs font-semibold text-white/80">{title}</h4>
-        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/5 ${ratingColors[rating] || "text-white/50"}`}>
+        <span className={`text-caption font-medium px-2 py-0.5 rounded-full bg-white/5 ${ratingColors[rating] || "text-white/50"}`}>
           {rating.replace(/-/g, " ")}
         </span>
       </div>
       <div className="flex flex-wrap gap-3 mb-3">
         {stats.map((s) => (
-          <div key={s.label} className="text-[10px]">
+          <div key={s.label} className="text-caption">
             <span className="text-white/40">{s.label}: </span>
             <span className="text-white/70 font-medium">{s.value}</span>
           </div>
         ))}
       </div>
-      <p className="text-[11px] text-white/50 leading-relaxed">{advice}</p>
+      <p className="text-label text-white/50 leading-relaxed">{advice}</p>
     </div>
   );
 }

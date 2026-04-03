@@ -22,6 +22,14 @@ module.exports = {
           overlay: "rgb(var(--surface-overlay) / <alpha-value>)",
         },
       },
+      fontSize: {
+        caption: ["10px", { lineHeight: "14px", letterSpacing: "0.01em" }],
+        label: ["12px", { lineHeight: "16px", letterSpacing: "0.005em" }],
+        body: ["14px", { lineHeight: "20px" }],
+        subtitle: ["16px", { lineHeight: "24px" }],
+        heading: ["20px", { lineHeight: "28px" }],
+        display: ["30px", { lineHeight: "36px" }],
+      },
       borderRadius: { lg: "var(--radius)", md: "calc(var(--radius) - 2px)", sm: "calc(var(--radius) - 4px)" },
       keyframes: {
         "nod": { "0%, 100%": { transform: "translateY(0)" }, "50%": { transform: "translateY(-3px)" } },

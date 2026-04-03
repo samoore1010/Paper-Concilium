@@ -155,7 +155,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
                     <div className={`text-lg font-bold ${scoreColor}`}>{(session.overallScore || 0).toFixed(1)}/10</div>
                     <div className="flex items-center justify-between mt-1">
                       <span className="text-xs text-white/40">{session.personaIds.length} personas</span>
-                      {session.feedback && <span className="text-[10px] text-blue-400">View report</span>}
+                      {session.feedback && <span className="text-caption text-blue-400">View report</span>}
                     </div>
                   </button>
                 );
@@ -207,7 +207,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
                   <span className="text-lg">{pack.icon}</span>
                   <span className="font-medium text-sm">{pack.name}</span>
                 </div>
-                <div className="text-[10px] text-white/40 uppercase tracking-wider mb-1">{pack.subtitle}</div>
+                <div className="text-caption text-white/40 uppercase tracking-wider mb-1">{pack.subtitle}</div>
                 <div className="text-xs text-white/40 leading-relaxed line-clamp-2">{pack.description}</div>
               </button>
             ))}
@@ -285,7 +285,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
                         </div>
 
                         {/* Name */}
-                        <div className={`text-[10px] font-medium mt-1 truncate w-full text-center ${
+                        <div className={`text-caption font-medium mt-1 truncate w-full text-center ${
                           !unlocked ? "text-white/15" : "text-white/80"
                         }`}>
                           {unlocked ? persona.name.split(" ")[0] : "???"}
@@ -397,7 +397,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
                           </svg>
                         </div>
                       </div>
-                      <span className="text-[9px] text-white/50 font-medium">{persona.name.split(" ")[0]}</span>
+                      <span className="text-caption text-white/50 font-medium">{persona.name.split(" ")[0]}</span>
                     </motion.button>
                   ))}
                 </ScrollFadeContainer>
@@ -474,7 +474,7 @@ function SpotlightPanel({
               {unlocked ? persona.name : "???"}
             </h3>
             {unlocked && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-overlay text-white/50">
+              <span className="text-caption px-1.5 py-0.5 rounded bg-surface-overlay text-white/50">
                 {persona.age}
               </span>
             )}
@@ -484,7 +484,7 @@ function SpotlightPanel({
           </div>
           <div className="text-xs text-white/40 italic mt-0.5">{persona.archetype}</div>
           {unlocked && persona.catchphrase && (
-            <div className="text-[11px] text-white/30 mt-1">"{persona.catchphrase}"</div>
+            <div className="text-label text-white/30 mt-1">"{persona.catchphrase}"</div>
           )}
         </div>
 
@@ -524,7 +524,7 @@ function SpotlightPanel({
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="text-white/20 flex-shrink-0">
               <path d="M8 1a4 4 0 0 0-4 4v3H3a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1h-1V5a4 4 0 0 0-4-4z" fill="currentColor" />
             </svg>
-            <span className="text-[11px] text-white/30">{req.description}</span>
+            <span className="text-label text-white/30">{req.description}</span>
           </div>
         )}
       </div>
@@ -537,8 +537,8 @@ function StatBar({ label, value, color }: { label: string; value: number; color:
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[9px] text-white/40 uppercase tracking-wider">{label}</span>
-        <span className="text-[9px] font-mono text-white/50">{value}</span>
+        <span className="text-caption text-white/40 uppercase tracking-wider">{label}</span>
+        <span className="text-caption font-mono text-white/50">{value}</span>
       </div>
       <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
         <motion.div
@@ -556,7 +556,7 @@ function StatBar({ label, value, color }: { label: string; value: number; color:
 function MasteryBadge({ tier }: { tier: MasteryTier }) {
   return (
     <span
-      className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+      className="text-caption px-1.5 py-0.5 rounded-full font-medium"
       style={{
         backgroundColor: `${MASTERY_COLORS[tier]}20`,
         color: MASTERY_COLORS[tier],
@@ -574,7 +574,7 @@ function Tag({ children, color }: { children: React.ReactNode; color: string }) 
     orange: "bg-orange-500/20 text-orange-300",
   };
   return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded ${colors[color] || colors.blue}`}>
+    <span className={`text-caption px-1.5 py-0.5 rounded ${colors[color] || colors.blue}`}>
       {children}
     </span>
   );
