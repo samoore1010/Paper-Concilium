@@ -209,8 +209,8 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
         return; // Wait for coalescing window before sending
       }
 
-      // If we have buffered committed text and 1000ms passed since last commit → flush
-      if (coalesceBufferRef.current.length > 0 && (now - lastCommitTimeRef.current) >= 1000) {
+      // If we have buffered committed text and 500ms passed since last commit → flush
+      if (coalesceBufferRef.current.length > 0 && (now - lastCommitTimeRef.current) >= 500) {
         flushToChat(coalesceBufferRef.current, "committed");
         coalesceBufferRef.current = "";
         // Reset interim tracking since committed text supersedes it
@@ -966,6 +966,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
               availableProviders={availableProviders} activeProvider={activeProvider} onProviderChange={setProvider}
               onDismiss={(id) => setQuestionQueue((prev) => prev.filter((q) => q.id !== id))}
               onToggleTTS={() => setTtsEnabled(!ttsEnabled)}
+              continuousActive={continuousActive} interimTranscript={interimTranscript}
             />
           </div>
         </div>
@@ -1010,6 +1011,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
                     onListen={handleListenToQuestion} onRead={handleReadQuestion}
                     onDismiss={(id) => setQuestionQueue((prev) => prev.filter((q) => q.id !== id))}
                     onToggleTTS={() => setTtsEnabled(!ttsEnabled)}
+                    continuousActive={continuousActive} interimTranscript={interimTranscript}
                   />
                 </div>
               </motion.div>
@@ -1103,7 +1105,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
 }
 
 // === TAB CONTENT (shared by desktop sidebar + mobile bottom sheet) ===
-function TabContent({ sideTab, questionQueue, personas, speakingPersonaId, ttsEnabled, speechMetrics, prosodyMetrics, visualMetrics, chatMessages, chatEndRef, availableProviders, activeProvider, onProviderChange, onListen, onRead, onDismiss, onToggleTTS }: {
+function TabContent({ sideTab, questionQueue, personas, speakingPersonaId, ttsEnabled, speechMetrics, prosodyMetrics, visualMetrics, chatMessages, chatEndRef, availableProviders, activeProvider, onProviderChange, onListen, onRead, onDismiss, onToggleTTS, continuousActive, interimTranscript }: {
   sideTab: SideTab;
   questionQueue: QueuedQuestion[]; personas: Persona[]; speakingPersonaId: string | null;
   ttsEnabled: boolean;
@@ -1115,6 +1117,7 @@ function TabContent({ sideTab, questionQueue, personas, speakingPersonaId, ttsEn
   availableProviders?: string[]; activeProvider?: string; onProviderChange?: (p: any) => void;
   onListen: (q: QueuedQuestion) => void; onRead: (q: QueuedQuestion) => void;
   onDismiss: (id: string) => void; onToggleTTS: () => void;
+  continuousActive: boolean; interimTranscript: string;
 }) {
   if (sideTab === "coach") {
     return (
@@ -1163,6 +1166,11 @@ function TabContent({ sideTab, questionQueue, personas, speakingPersonaId, ttsEn
           <span className="font-medium">{msg.from}:</span> <span className="text-white/50">{msg.text}</span>
         </div>
       ))}
+      {continuousActive && interimTranscript && (
+        <div className="text-xs text-blue-300/50 italic">
+          <span className="font-medium">You:</span> <span className="text-white/25">{interimTranscript}▋</span>
+        </div>
+      )}
       <div ref={chatEndRef} />
     </div>
   );
