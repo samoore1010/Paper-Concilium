@@ -1,10 +1,41 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 interface TeleprompterProps {
   script: string;
   isActive: boolean;
   isLive: boolean;        // true when user clicks "Go Live"
   onToggle: () => void;
+}
+
+// Parse script into sections based on --- Section: Title (~Xm) --- markers
+function parseScriptSections(script: string): Array<{ type: "section-marker"; title: string; time: string } | { type: "text"; content: string }> {
+  const sectionPattern = /^---\s*Section:\s*(.+?)\s*(?:\(([^)]+)\))?\s*---$/gm;
+  const parts: Array<{ type: "section-marker"; title: string; time: string } | { type: "text"; content: string }> = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = sectionPattern.exec(script)) !== null) {
+    // Add text before this marker
+    if (match.index > lastIndex) {
+      const text = script.slice(lastIndex, match.index).trim();
+      if (text) parts.push({ type: "text", content: text });
+    }
+    parts.push({ type: "section-marker", title: match[1].trim(), time: match[2]?.trim() || "" });
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Add remaining text
+  if (lastIndex < script.length) {
+    const text = script.slice(lastIndex).trim();
+    if (text) parts.push({ type: "text", content: text });
+  }
+
+  // If no markers found, return the whole script as a single text block
+  if (parts.length === 0 && script.trim()) {
+    parts.push({ type: "text", content: script.trim() });
+  }
+
+  return parts;
 }
 
 export function Teleprompter({ script, isActive, isLive, onToggle }: TeleprompterProps) {
@@ -15,6 +46,8 @@ export function Teleprompter({ script, isActive, isLive, onToggle }: Teleprompte
   const [scrollPosition, setScrollPosition] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef(0);
+
+  const sections = useMemo(() => parseScriptSections(script), [script]);
 
   // Auto-start scrolling when user goes live (if teleprompter is visible)
   useEffect(() => {
@@ -157,7 +190,18 @@ export function Teleprompter({ script, isActive, isLive, onToggle }: Teleprompte
           className="text-white/90 leading-relaxed font-light text-center max-w-xl mx-auto"
           style={{ fontSize: `${fontSize}px`, lineHeight: "1.6" }}
         >
-          {script}
+          {sections.map((part, i) =>
+            part.type === "section-marker" ? (
+              <div key={i} className="my-4 py-2 border-t border-white/10 first:border-0 first:pt-0">
+                <div className="text-xs uppercase tracking-widest text-emerald-400/70 font-medium">
+                  {part.title}
+                  {part.time && <span className="ml-2 text-white/30">{part.time}</span>}
+                </div>
+              </div>
+            ) : (
+              <div key={i} className="mb-4 whitespace-pre-wrap">{part.content}</div>
+            )
+          )}
         </div>
         <div className="h-[20vh]" />
       </div>

@@ -308,22 +308,66 @@ app.post("/api/generate-script", async (req, res) => {
   const client = getClient();
   if (!client) return res.status(503).json({ error: "LLM not configured." });
 
-  const { description, sessionType, durationMinutes } = req.body;
-  if (!description) return res.status(400).json({ error: "description required" });
+  const { description, sessionType, durationMinutes, sourceContext, emphasisNotes, outlineMode } = req.body;
+  if (!description && !sourceContext) return res.status(400).json({ error: "description or sourceContext required" });
 
   const duration = durationMinutes || 3;
   const wordCount = duration * 130; // ~130 WPM target
 
-  try {
-    console.log(`[Script] Generating ${duration}min script for: "${description.substring(0, 50)}..."`);
+  // Source-material-aware generation uses Sonnet for quality; plain generation uses Haiku
+  const isFromMaterials = !!sourceContext?.combinedText;
+  const model = isFromMaterials ? "claude-sonnet-4-5-20250514" : "claude-haiku-4-5-20251001";
 
-    const message = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 2000,
-      system: "You are an expert speechwriter. Generate scripts that are natural to speak aloud — conversational, clear, with natural pause points. Do not include stage directions or annotations. Just the spoken words.",
-      messages: [{
-        role: "user",
-        content: `Write a ${duration}-minute ${sessionType?.replace(/-/g, " ") || "presentation"} script (approximately ${wordCount} words) based on this description:
+  try {
+    const sourceLabel = isFromMaterials
+      ? `${sourceContext.fileCount} source file(s): ${sourceContext.filenames.join(", ")}`
+      : description.substring(0, 50);
+    console.log(`[Script] Generating ${duration}min ${outlineMode ? "outline" : "script"} from: "${sourceLabel}..."`);
+
+    let userPrompt: string;
+
+    if (isFromMaterials) {
+      // Structured generation from uploaded source materials
+      const sessionLabel = sessionType?.replace(/-/g, " ") || "presentation";
+      const modeInstruction = outlineMode
+        ? `Generate a structured OUTLINE (not a full script) for a ${duration}-minute ${sessionLabel}. For each section, provide:
+- A section heading
+- 3-5 key talking points as bullet points
+- Transition notes to the next section
+- Approximate time allocation
+
+Use the format:
+--- Section: [Section Title] (~Xm) ---
+• Key point 1
+• Key point 2
+• Key point 3
+[Transition: brief transition note]`
+        : `Write a ${duration}-minute ${sessionLabel} script (approximately ${wordCount} words) structured around the source material.
+
+Use section markers in this exact format to divide the script:
+--- Section: [Section Title] (~Xm) ---
+
+Where X is the approximate minutes for that section. Then write the spoken words for that section.
+
+Requirements:
+- Natural spoken language (not written prose)
+- Strong opening that hooks the audience
+- Smooth transitions between sections
+- Key data points and supporting evidence from the source material woven in naturally
+- Rhetorical questions and pause-worthy moments
+- Strong closing that reinforces the main message
+- Approximately ${wordCount} words total`;
+
+      userPrompt = `${modeInstruction}
+
+SOURCE MATERIAL:
+${sourceContext.combinedText.substring(0, 12000)}
+
+${description ? `SPEAKER'S DESCRIPTION/FOCUS:\n${description}\n` : ""}${emphasisNotes ? `EMPHASIS NOTES (areas to highlight):\n${emphasisNotes}\n` : ""}
+Generate the ${outlineMode ? "outline" : "script"} now. Return ONLY the ${outlineMode ? "outline" : "script text with section markers"}, no meta-commentary.`;
+    } else {
+      // Original plain generation (no source materials)
+      userPrompt = `Write a ${duration}-minute ${sessionType?.replace(/-/g, " ") || "presentation"} script (approximately ${wordCount} words) based on this description:
 
 "${description}"
 
@@ -334,12 +378,22 @@ Requirements:
 - Appropriate for the session type
 - Approximately ${wordCount} words
 
-Return ONLY the script text, no titles or annotations.`,
-      }],
+Return ONLY the script text, no titles or annotations.`;
+    }
+
+    const systemPrompt = isFromMaterials
+      ? "You are an expert speechwriter and presentation coach. You transform source materials into compelling, well-structured presentations. You preserve key facts, data points, and arguments from the source while making them natural and engaging to speak aloud. You organize content into clear sections with smooth transitions."
+      : "You are an expert speechwriter. Generate scripts that are natural to speak aloud — conversational, clear, with natural pause points. Do not include stage directions or annotations. Just the spoken words.";
+
+    const message = await client.messages.create({
+      model,
+      max_tokens: isFromMaterials ? 4000 : 2000,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
     });
 
     const text = message.content[0].type === "text" ? message.content[0].text : "";
-    console.log(`[Script] Generated ${text.split(/\s+/).length} words`);
+    console.log(`[Script] Generated ${text.split(/\s+/).length} words (${outlineMode ? "outline" : "script"}, model: ${model})`);
     res.json({ script: text.trim() });
   } catch (error: any) {
     console.error("[Script] Error:", error.message);
@@ -353,13 +407,13 @@ app.post("/api/react", async (req, res) => {
   const client = getClient();
   if (!client) return res.status(503).json({ error: "LLM not configured." });
 
-  const { personaId, userText, sessionType, messageHistory } = req.body;
+  const { personaId, userText, sessionType, messageHistory, sourceContext } = req.body;
   if (!personaId || !userText) return res.status(400).json({ error: "personaId and userText required" });
 
   const effectiveSessionType = sessionType || "business-pitch";
   try {
     const persona = getPersonaPrompt(personaId, effectiveSessionType);
-    const prompt = buildReactionPrompt(persona, userText, effectiveSessionType, messageHistory || []);
+    const prompt = buildReactionPrompt(persona, userText, effectiveSessionType, messageHistory || [], sourceContext || undefined);
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001", max_tokens: 300,
       system: persona.systemPrompt, messages: [{ role: "user", content: prompt }],
@@ -378,7 +432,7 @@ app.post("/api/react-batch", async (req, res) => {
   const client = getClient();
   if (!client) return res.status(503).json({ error: "LLM not configured." });
 
-  const { personaIds, userText, sessionType, messageHistory } = req.body;
+  const { personaIds, userText, sessionType, messageHistory, sourceContext } = req.body;
   if (!personaIds?.length || !userText) return res.status(400).json({ error: "personaIds and userText required" });
 
   const effectiveSessionType = sessionType || "business-pitch";
@@ -386,7 +440,7 @@ app.post("/api/react-batch", async (req, res) => {
     const results = await Promise.allSettled(
       personaIds.map(async (personaId: string) => {
         const persona = getPersonaPrompt(personaId, effectiveSessionType);
-        const prompt = buildReactionPrompt(persona, userText, effectiveSessionType, messageHistory || []);
+        const prompt = buildReactionPrompt(persona, userText, effectiveSessionType, messageHistory || [], sourceContext || undefined);
         const message = await client.messages.create({
           model: "claude-haiku-4-5-20251001", max_tokens: 300,
           system: persona.systemPrompt, messages: [{ role: "user", content: prompt }],

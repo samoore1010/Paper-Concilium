@@ -108,6 +108,14 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Materials script generation state
+  const [materialsDescription, setMaterialsDescription] = useState("");
+  const [materialsEmphasis, setMaterialsEmphasis] = useState("");
+  const [materialsDuration, setMaterialsDuration] = useState(3);
+  const [outlineMode, setOutlineMode] = useState(false);
+  const [isGeneratingFromMaterials, setIsGeneratingFromMaterials] = useState(false);
+  const [generatedFromMaterials, setGeneratedFromMaterials] = useState(false);
+
   const handleGenerate = async () => {
     if (!description.trim()) return;
     setIsGenerating(true);
@@ -127,6 +135,35 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
       alert("Failed to connect to server.");
     }
     setIsGenerating(false);
+  };
+
+  const handleGenerateFromMaterials = async () => {
+    if (!sourceContext) return;
+    setIsGeneratingFromMaterials(true);
+    try {
+      const res = await fetch("/api/generate-script", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description: materialsDescription || undefined,
+          sessionType,
+          durationMinutes: materialsDuration,
+          sourceContext,
+          emphasisNotes: materialsEmphasis || undefined,
+          outlineMode,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMaterialsText(data.script);
+        setGeneratedFromMaterials(true);
+      } else {
+        alert("Failed to generate script from materials. Make sure the LLM backend is configured.");
+      }
+    } catch {
+      alert("Failed to connect to server.");
+    }
+    setIsGeneratingFromMaterials(false);
   };
 
   const handleSuggestTopic = useCallback(() => {
@@ -374,7 +411,7 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
               </div>
             )}
 
-            {/* File list + extracted preview */}
+            {/* File list + generation controls */}
             {extractedFiles.length > 0 && (
               <>
                 <div className="space-y-2">
@@ -422,12 +459,90 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
                   />
                 </div>
 
+                {/* Generate from materials controls */}
+                <div className="bg-surface-raised border border-emerald-500/20 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-medium text-emerald-300">Generate from My Materials</span>
+                    <span className="text-caption text-white/30">— AI transforms your content into a presentation script</span>
+                  </div>
+
+                  <textarea
+                    value={materialsDescription}
+                    onChange={(e) => setMaterialsDescription(e.target.value)}
+                    placeholder="Optional: describe your angle or focus (e.g., 'Focus on the market opportunity and competitive advantage')"
+                    className="w-full h-16 bg-surface-base border border-white/5 rounded-lg p-3 text-sm text-white placeholder-white/30 outline-none focus:border-emerald-400/50 resize-none"
+                  />
+
+                  <textarea
+                    value={materialsEmphasis}
+                    onChange={(e) => setMaterialsEmphasis(e.target.value)}
+                    placeholder="Optional: areas to emphasize (e.g., 'Revenue projections on slide 3, customer testimonials')"
+                    className="w-full h-12 bg-surface-base border border-white/5 rounded-lg p-3 text-sm text-white placeholder-white/30 outline-none focus:border-emerald-400/50 resize-none"
+                  />
+
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <div>
+                      <label className="text-xs text-white/50 mb-1 block">Duration</label>
+                      <select
+                        value={materialsDuration}
+                        onChange={(e) => setMaterialsDuration(Number(e.target.value))}
+                        className="bg-surface-base border border-white/5 rounded-lg px-3 py-2 text-sm text-white outline-none"
+                      >
+                        <option value={1}>1 minute</option>
+                        <option value={2}>2 minutes</option>
+                        <option value={3}>3 minutes</option>
+                        <option value={5}>5 minutes</option>
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-white/50">Mode</label>
+                      <button
+                        onClick={() => setOutlineMode(false)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                          !outlineMode ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-white/5 text-white/40 border border-white/5 hover:text-white/60"
+                        }`}
+                      >
+                        Full Script
+                      </button>
+                      <button
+                        onClick={() => setOutlineMode(true)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                          outlineMode ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-white/5 text-white/40 border border-white/5 hover:text-white/60"
+                        }`}
+                      >
+                        Outline Only
+                      </button>
+                    </div>
+
+                    <div className="flex-1" />
+                    <button
+                      onClick={handleGenerateFromMaterials}
+                      disabled={isGeneratingFromMaterials}
+                      className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      {isGeneratingFromMaterials ? "Generating..." : generatedFromMaterials ? "Regenerate Script" : "Generate Script"}
+                    </button>
+                  </div>
+
+                  {outlineMode && (
+                    <div className="text-caption text-white/40">
+                      Outline mode generates key talking points and transitions — ideal for experienced speakers who want structure without word-for-word scripting.
+                    </div>
+                  )}
+                </div>
+
+                {/* Generated/editable script output */}
                 <div>
-                  <label className="text-xs text-white/50 mb-1 block">Extracted Content (you can edit before starting)</label>
+                  <label className="text-xs text-white/50 mb-1 block">
+                    {generatedFromMaterials ? "Generated Script (you can edit)" : "Extracted Content (you can edit, or generate a script above)"}
+                  </label>
                   <textarea
                     value={materialsText}
                     onChange={(e) => setMaterialsText(e.target.value)}
-                    className="w-full h-48 md:h-64 bg-surface-raised border border-emerald-500/30 rounded-xl p-4 text-sm text-white outline-none resize-none"
+                    className={`w-full h-48 md:h-64 bg-surface-raised border rounded-xl p-4 text-sm text-white outline-none resize-none ${
+                      generatedFromMaterials ? "border-emerald-500/40" : "border-emerald-500/30"
+                    }`}
                   />
                   <div className="text-caption text-white/30 mt-1">
                     {materialsText.split(/\s+/).filter(Boolean).length} words · ~{Math.round(materialsText.split(/\s+/).filter(Boolean).length / 130)} min
