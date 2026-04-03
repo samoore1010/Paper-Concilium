@@ -8,6 +8,8 @@ export interface LLMReaction {
   reasoning: string;
   shouldInterrupt?: boolean;
   urgency?: "low" | "medium" | "high";
+  /** Reaction intensity 0.3-1.0 (mild to emphatic). Drives animation amplitude. */
+  intensity?: number;
 }
 
 export interface LLMFeedback {
@@ -47,15 +49,24 @@ export async function getLLMReactionsBatch(
   if (!res.ok) throw new Error("Failed to get LLM reactions");
 
   const data = await res.json();
-  return (data.reactions || []).map((r: any) => ({
-    personaId: r.personaId,
-    reaction: mapReaction(r.reaction),
-    comment: r.comment || null,
-    question: r.question || null,
-    reasoning: r.reasoning || "",
-    shouldInterrupt: r.shouldInterrupt === true || r.shouldInterrupt === "true",
-    urgency: r.urgency || "low",
-  }));
+  return (data.reactions || []).map((r: any) => {
+    const urgency = r.urgency || "low";
+    // Derive intensity: use LLM-provided value if valid, else map from urgency
+    let intensity = typeof r.intensity === "number" ? r.intensity : null;
+    if (intensity === null || intensity < 0.3 || intensity > 1.0) {
+      intensity = urgency === "high" ? 0.9 : urgency === "medium" ? 0.65 : 0.45;
+    }
+    return {
+      personaId: r.personaId,
+      reaction: mapReaction(r.reaction),
+      comment: r.comment || null,
+      question: r.question || null,
+      reasoning: r.reasoning || "",
+      shouldInterrupt: r.shouldInterrupt === true || r.shouldInterrupt === "true",
+      urgency,
+      intensity,
+    };
+  });
 }
 
 export async function getLLMFeedbackBatch(

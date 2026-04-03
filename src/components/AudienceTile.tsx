@@ -20,9 +20,11 @@ interface AudienceTileProps {
   characterContext?: CharacterContext;
   /** Whether to play entrance animation (session just started) */
   showEntrance?: boolean;
+  /** Reaction intensity 0.3-1.0 from LLM, drives animation amplitude */
+  reactionIntensity?: number;
 }
 
-export function AudienceTile({ persona, reaction, reactionEmoji, isActive, isMuted = true, isSpeaking, pendingQuestion, onQuestionClick, onClick, themeAccentColor, characterContext, showEntrance }: AudienceTileProps) {
+export function AudienceTile({ persona, reaction, reactionEmoji, isActive, isMuted = true, isSpeaking, pendingQuestion, onQuestionClick, onClick, themeAccentColor, characterContext, showEntrance, reactionIntensity }: AudienceTileProps) {
   const getReactionGlowClass = () => {
     if (isSpeaking) return "reaction-glow-speaking";
     if (reaction === "nod" || reaction === "smile") return "reaction-glow-positive";
@@ -89,6 +91,7 @@ export function AudienceTile({ persona, reaction, reactionEmoji, isActive, isMut
             persona={persona}
             size={typeof window !== "undefined" && window.innerWidth < 768 ? 70 : 110}
             reaction={displayReaction}
+            reactionIntensity={reactionIntensity}
             showReactionEmoji={reactionEmoji}
             themeAccentColor={themeAccentColor}
             enableParallax={true}

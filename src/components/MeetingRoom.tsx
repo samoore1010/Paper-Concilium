@@ -41,6 +41,8 @@ interface PersonaState {
   reaction: ReactionType;
   emoji?: string;
   lastHandRaiseAt?: number;
+  /** Reaction intensity 0.3-1.0, drives animation amplitude */
+  intensity?: number;
 }
 
 type SideTab = "chat" | "coach" | "questions";
@@ -523,7 +525,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
 
           setPersonaStates((prev) => ({
             ...prev,
-            [r.personaId]: { reaction: r.reaction, lastHandRaiseAt: prev[r.personaId]?.lastHandRaiseAt },
+            [r.personaId]: { reaction: r.reaction, intensity: r.intensity, lastHandRaiseAt: prev[r.personaId]?.lastHandRaiseAt },
           }));
 
           const responseText = r.question || r.comment;
@@ -788,6 +790,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
     return (
       <AudienceTile
         key={persona.id} persona={persona} reaction={state.reaction} reactionEmoji={state.emoji}
+        reactionIntensity={state.intensity}
         isSpeaking={speakingPersonaId === persona.id}
         pendingQuestion={questionQueue.find((q) => q.personaId === persona.id)}
         onQuestionClick={handleQuestionClick}
