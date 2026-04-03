@@ -4,6 +4,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
+import multer from "multer";
+import { PDFParse } from "pdf-parse";
+import mammoth from "mammoth";
 import { getPersonaPrompt, buildReactionPrompt, buildFeedbackPrompt } from "./personaPrompts.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -468,6 +471,141 @@ app.post("/api/feedback-batch", async (req, res) => {
   } catch (error: any) {
     console.error("Batch feedback error:", error.message);
     res.status(500).json({ error: "Failed to generate feedback" });
+  }
+});
+
+// === Source Material Extraction ===
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 5 }, // 10MB per file, max 5 files
+  fileFilter: (_req, file, cb) => {
+    const allowed = [
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "text/plain",
+      "text/markdown",
+    ];
+    // Also accept by extension as MIME types can vary
+    const ext = path.extname(file.originalname).toLowerCase();
+    const allowedExts = [".pdf", ".docx", ".pptx", ".txt", ".md"];
+    if (allowed.includes(file.mimetype) || allowedExts.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Unsupported file type: ${file.mimetype} (${ext})`));
+    }
+  },
+});
+
+interface ExtractedFile {
+  filename: string;
+  type: string;
+  text: string;
+  pageCount?: number;
+}
+
+async function extractFileContent(file: Express.Multer.File): Promise<ExtractedFile> {
+  const ext = path.extname(file.originalname).toLowerCase();
+  const base: Omit<ExtractedFile, "text"> = { filename: file.originalname, type: ext.replace(".", "") };
+
+  if (ext === ".txt" || ext === ".md") {
+    return { ...base, text: file.buffer.toString("utf-8") };
+  }
+
+  if (ext === ".pdf") {
+    const parser = new PDFParse({ data: new Uint8Array(file.buffer) });
+    const textResult = await parser.getText();
+    const info = await parser.getInfo();
+    await parser.destroy();
+    return { ...base, text: textResult.text, pageCount: info.total };
+  }
+
+  if (ext === ".docx") {
+    const result = await mammoth.extractRawText({ buffer: file.buffer });
+    return { ...base, text: result.value };
+  }
+
+  if (ext === ".pptx") {
+    // PPTX is a ZIP of XML files — extract slide text via basic XML parsing
+    const text = await extractPptxText(file.buffer);
+    return { ...base, text };
+  }
+
+  throw new Error(`No extractor for ${ext}`);
+}
+
+async function extractPptxText(buffer: Buffer): Promise<string> {
+  const JSZip = (await import("jszip")).default;
+  const zip = await JSZip.loadAsync(buffer);
+  const slides: { num: number; text: string }[] = [];
+
+  for (const [filename, zipEntry] of Object.entries(zip.files)) {
+    const match = filename.match(/ppt\/slides\/slide(\d+)\.xml/);
+    if (match && !zipEntry.dir) {
+      const xml = await zipEntry.async("string");
+      // Extract text from <a:t> tags
+      const textParts: string[] = [];
+      const regex = /<a:t>([\s\S]*?)<\/a:t>/g;
+      let m;
+      while ((m = regex.exec(xml)) !== null) {
+        textParts.push(m[1]);
+      }
+      if (textParts.length > 0) {
+        slides.push({ num: parseInt(match[1]), text: textParts.join(" ") });
+      }
+    }
+  }
+
+  slides.sort((a, b) => a.num - b.num);
+  return slides.map((s) => `[Slide ${s.num}]\n${s.text}`).join("\n\n");
+}
+
+app.post("/api/extract-materials", upload.array("files", 5), async (req, res) => {
+  const files = req.files as Express.Multer.File[];
+  if (!files || files.length === 0) {
+    return res.status(400).json({ error: "No files provided" });
+  }
+
+  console.log(`[Materials] Extracting ${files.length} file(s): ${files.map((f) => f.originalname).join(", ")}`);
+
+  try {
+    const results = await Promise.allSettled(files.map(extractFileContent));
+
+    const extracted: ExtractedFile[] = [];
+    const errors: { filename: string; error: string }[] = [];
+
+    results.forEach((r, i) => {
+      if (r.status === "fulfilled") {
+        extracted.push(r.value);
+      } else {
+        errors.push({ filename: files[i].originalname, error: r.reason?.message || "Unknown error" });
+      }
+    });
+
+    // Build sourceContext summary
+    const combinedText = extracted.map((e) => {
+      const header = e.pageCount ? `--- ${e.filename} (${e.pageCount} pages) ---` : `--- ${e.filename} ---`;
+      return `${header}\n${e.text}`;
+    }).join("\n\n");
+
+    console.log(`[Materials] Extracted ${extracted.length} file(s), ${errors.length} error(s), ${combinedText.length} chars total`);
+
+    res.json({
+      extracted,
+      errors,
+      combinedText,
+      sourceContext: {
+        fileCount: extracted.length,
+        filenames: extracted.map((e) => e.filename),
+        totalChars: combinedText.length,
+        summary: combinedText.substring(0, 500) + (combinedText.length > 500 ? "..." : ""),
+      },
+    });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("[Materials] Error:", msg);
+    res.status(500).json({ error: "Failed to extract materials", detail: msg });
   }
 });
 
