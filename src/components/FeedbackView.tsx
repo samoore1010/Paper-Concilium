@@ -13,9 +13,10 @@ interface FeedbackViewProps {
   recordingData?: SessionRecordingData;
   onNewSession: () => void;
   onViewSession?: (session: SessionRecord) => void;
+  onViewProgress?: () => void;
 }
 
-export function FeedbackView({ feedback, transcript, recordingData, onNewSession, onViewSession }: FeedbackViewProps) {
+export function FeedbackView({ feedback, transcript, recordingData, onNewSession, onViewSession, onViewProgress }: FeedbackViewProps) {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [tab, setTab] = useState<"feedback" | "recording" | "history">("feedback");
   const [sessionHistory, setSessionHistory] = useState<SessionRecord[]>([]);
@@ -46,9 +47,16 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
             <h1 className="text-base md:text-lg font-semibold">Session Feedback</h1>
             <p className="text-label md:text-xs text-white/40">Review critiques from your audience</p>
           </div>
-          <button onClick={onNewSession} className="px-3 md:px-4 py-1.5 md:py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-xs md:text-sm font-medium">
-            New Session
-          </button>
+          <div className="flex items-center gap-2">
+            {onViewProgress && (
+              <button onClick={onViewProgress} className="px-3 md:px-4 py-1.5 md:py-2 border border-white/10 hover:bg-white/5 rounded-lg text-xs md:text-sm font-medium text-white/60 transition-colors">
+                View Progress
+              </button>
+            )}
+            <button onClick={onNewSession} className="px-3 md:px-4 py-1.5 md:py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-xs md:text-sm font-medium">
+              New Session
+            </button>
+          </div>
         </div>
       </header>
 
