@@ -11,6 +11,8 @@ interface UseAudioRecorderReturn {
   startRecording: (externalStream?: MediaStream) => Promise<void>;
   stopRecording: () => Promise<RecordingData>;
   getRecording: () => RecordingData;
+  /** Mix a TTS audio blob into the recording stream (audience/character audio) */
+  mixAudioBlob: (blob: Blob) => void;
 }
 
 export function useAudioRecorder(): UseAudioRecorderReturn {
@@ -23,6 +25,11 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
   const mimeTypeRef = useRef("");
 
   const ownsStreamRef = useRef(true);
+
+  // Web Audio mixing graph: combines mic + TTS into one stream for recording
+  const mixContextRef = useRef<AudioContext | null>(null);
+  const mixDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
   const startRecording = useCallback(async (externalStream?: MediaStream) => {
     try {
@@ -37,13 +44,26 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         ownsStreamRef.current = true;
       }
 
+      // Set up Web Audio mixing graph: mic + TTS → destination → MediaRecorder
+      const mixContext = new AudioContext();
+      const destination = mixContext.createMediaStreamDestination();
+      const micSource = mixContext.createMediaStreamSource(stream);
+      micSource.connect(destination);
+
+      mixContextRef.current = mixContext;
+      mixDestinationRef.current = destination;
+      micSourceRef.current = micSource;
+
+      // Record from the mixed destination stream (mic + any TTS mixed in)
+      const recordStream = destination.stream;
+
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
         : MediaRecorder.isTypeSupported("audio/webm")
         ? "audio/webm"
         : "audio/mp4";
 
-      const recorder = new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 128000 });
+      const recorder = new MediaRecorder(recordStream, { mimeType, audioBitsPerSecond: 128000 });
 
       chunksRef.current = [];
       blobRef.current = null;
@@ -59,10 +79,31 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       startTimeRef.current = Date.now();
       mediaRecorderRef.current = recorder;
       setIsRecording(true);
-      console.log(`[Recorder] Started (${mimeType})`);
+      console.log(`[Recorder] Started with audio mixing graph (${mimeType})`);
     } catch (err) {
       console.error("[Recorder] Failed to start:", err);
     }
+  }, []);
+
+  // Mix a TTS audio blob into the recording (audience/character voices).
+  // Decodes the blob and plays it through the mixing graph so it gets captured
+  // by the MediaRecorder alongside the user's mic audio.
+  const mixAudioBlob = useCallback((blob: Blob) => {
+    const ctx = mixContextRef.current;
+    const dest = mixDestinationRef.current;
+    if (!ctx || !dest || ctx.state === "closed") return;
+
+    blob.arrayBuffer().then((arrayBuffer) => {
+      return ctx.decodeAudioData(arrayBuffer);
+    }).then((audioBuffer) => {
+      const source = ctx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(dest);
+      source.start();
+      console.log(`[Recorder] Mixed TTS audio (${(blob.size / 1024).toFixed(1)}KB, ${audioBuffer.duration.toFixed(1)}s)`);
+    }).catch((err) => {
+      console.warn("[Recorder] Failed to mix TTS audio:", err);
+    });
   }, []);
 
   // Stop recording and wait for all data to be flushed
@@ -85,6 +126,15 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         urlRef.current = url;
         mediaRecorderRef.current = null;
         setIsRecording(false);
+
+        // Tear down the mixing graph
+        if (micSourceRef.current) micSourceRef.current.disconnect();
+        if (mixContextRef.current && mixContextRef.current.state !== "closed") {
+          mixContextRef.current.close();
+        }
+        micSourceRef.current = null;
+        mixContextRef.current = null;
+        mixDestinationRef.current = null;
 
         console.log(`[Recorder] Stopped: ${(blob.size / 1024).toFixed(1)}KB, ${duration.toFixed(1)}s, ${chunksRef.current.length} chunks`);
         resolve({ blob, url, duration });
@@ -114,9 +164,14 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
           mediaRecorderRef.current.stream.getTracks().forEach((t) => t.stop());
         }
       }
+      // Clean up mixing graph
+      if (micSourceRef.current) micSourceRef.current.disconnect();
+      if (mixContextRef.current && mixContextRef.current.state !== "closed") {
+        mixContextRef.current.close();
+      }
       // Don't revoke URL here — the consumer (FeedbackView) still needs it after unmount
     };
   }, []);
 
-  return { isRecording, startRecording, stopRecording, getRecording };
+  return { isRecording, startRecording, stopRecording, getRecording, mixAudioBlob };
 }

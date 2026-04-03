@@ -15,7 +15,12 @@ interface UseTTSReturn {
   debugLog: string[];
 }
 
-export function useTTS(): UseTTSReturn {
+interface UseTTSOptions {
+  /** Called with the raw TTS audio blob so it can be mixed into the session recording */
+  onAudioBlob?: (blob: Blob) => void;
+}
+
+export function useTTS(options?: UseTTSOptions): UseTTSReturn {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speakingText, setSpeakingText] = useState("");
   const [browserVoices, setBrowserVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -24,6 +29,10 @@ export function useTTS(): UseTTSReturn {
   const [debugLog, setDebugLog] = useState<string[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const apiProvidersRef = useRef<string[]>([]);
+
+  // Keep a stable ref to the callback so it doesn't trigger re-renders of speak()
+  const onAudioBlobRef = useRef(options?.onAudioBlob);
+  useEffect(() => { onAudioBlobRef.current = options?.onAudioBlob; }, [options?.onAudioBlob]);
 
   // Persistent audio element — created once, reused for all playback
   // This is the key to mobile: the element is "blessed" by user gesture
@@ -155,6 +164,9 @@ export function useTTS(): UseTTSReturn {
           return res.blob();
         })
         .then((blob) => {
+          // Notify recorder so TTS audio gets mixed into the session recording
+          onAudioBlobRef.current?.(blob);
+
           const url = URL.createObjectURL(blob);
           log(`Got audio blob (${blob.size} bytes), playing...`);
 
