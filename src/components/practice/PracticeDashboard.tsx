@@ -37,15 +37,18 @@ export function PracticeDashboard({ progress, onSelectLesson, onBack }: Practice
 
       <div className="max-w-4xl mx-auto px-4 md:px-6 py-6">
         {/* Stats bar */}
-        <div className="grid grid-cols-4 gap-2 md:gap-3 mb-6 md:mb-8">
+        <div className="grid grid-cols-4 gap-2 md:gap-3 mb-section-sm md:mb-section">
           <StatCard label="Level" value={LEVEL_NAMES[progress.level]} sub={`${progress.totalXP} XP`} color="blue" />
           <StatCard label="Stars" value={progress.totalStars.toString()} sub={`earned`} color="yellow" />
           <StatCard label="Streak" value={`${progress.currentStreak}d`} sub={`best: ${progress.longestStreak}d`} color="orange" />
           <StatCard label="Done" value={progress.totalExercisesCompleted.toString()} sub="exercises" color="emerald" />
         </div>
 
+        {/* Section Divider */}
+        <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-section-sm md:mb-section" />
+
         {/* XP Progress bar */}
-        <div className="mb-8 md:mb-10">
+        <div className="mb-section-sm md:mb-section">
           <div className="flex items-center justify-between text-xs text-white/40 mb-1">
             <span>Level {progress.level}: {LEVEL_NAMES[progress.level]}</span>
             <span>{progress.totalXP} / {levelInfo.next} XP</span>
@@ -67,9 +70,12 @@ export function PracticeDashboard({ progress, onSelectLesson, onBack }: Practice
           ))}
         </div>
 
+        {/* Section Divider */}
+        <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mt-section-sm md:mt-section mb-section-sm md:mb-section" />
+
         {/* Achievements */}
-        <div className="mt-10">
-          <h2 className="text-sm font-medium text-white/60 uppercase tracking-wider mb-4">Achievements</h2>
+        <div>
+          <h2 className="text-sm font-medium text-white/60 uppercase tracking-wider mb-subsection-sm md:mb-subsection">Achievements</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {ACHIEVEMENTS.map((ach) => {
               const unlocked = progress.achievements.includes(ach.id);

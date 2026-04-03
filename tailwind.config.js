@@ -4,6 +4,12 @@ module.exports = {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
+      spacing: {
+        'section': '3rem',         /* 48px — major section gap (desktop) */
+        'section-sm': '2rem',      /* 32px — major section gap (mobile) */
+        'subsection': '1.5rem',    /* 24px — subsection gap (desktop) */
+        'subsection-sm': '1rem',   /* 16px — subsection gap (mobile) */
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

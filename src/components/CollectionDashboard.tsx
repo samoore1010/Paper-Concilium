@@ -54,7 +54,7 @@ export function CollectionDashboard({ collection, onBack }: CollectionDashboardP
 
       <div className="max-w-6xl mx-auto px-6 py-8">
         {/* Summary Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-section-sm md:mb-section">
           <StatCard label="Characters" value={`${summary.totalUnlocked}/${summary.totalCharacters}`} sub="unlocked" />
           <StatCard label="Mastered" value={String(summary.totalMastered)} sub="characters" />
           <StatCard label="Sessions" value={String(summary.totalSessions)} sub="total" />
@@ -66,9 +66,12 @@ export function CollectionDashboard({ collection, onBack }: CollectionDashboardP
           />
         </div>
 
+        {/* Section Divider */}
+        <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-section-sm md:mb-section" />
+
         {/* Pack Progress */}
-        <section className="mb-8">
-          <h2 className="text-sm font-medium text-white/60 uppercase tracking-wider mb-4">Pack Progress</h2>
+        <section className="mb-section-sm md:mb-section">
+          <h2 className="text-sm font-medium text-white/60 uppercase tracking-wider mb-subsection-sm md:mb-subsection">Pack Progress</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {PERSONA_PACKS.map((pack) => {
               const progress = getPackProgress(collection, pack.id);
@@ -102,9 +105,12 @@ export function CollectionDashboard({ collection, onBack }: CollectionDashboardP
           </div>
         </section>
 
+        {/* Section Divider */}
+        <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-section-sm md:mb-section" />
+
         {/* Character Grid */}
         <section>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-subsection-sm md:mb-subsection">
             <h2 className="text-sm font-medium text-white/60 uppercase tracking-wider">
               {activePack === "all" ? "All Characters" : PERSONA_PACKS.find((p) => p.id === activePack)?.name}
             </h2>
