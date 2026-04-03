@@ -130,7 +130,7 @@ export function useElevenLabsSTT(): UseElevenLabsSTTReturn {
           constructor() {
             super();
             this.buffer = new Float32Array(0);
-            this.bufferSize = 4800; // ~100ms at 48kHz
+            this.bufferSize = 2400; // ~50ms at 48kHz (halved for lower latency)
           }
           process(inputs) {
             const input = inputs[0];

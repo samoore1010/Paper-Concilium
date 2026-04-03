@@ -159,23 +159,96 @@ export function useTTS(options?: UseTTSOptions): UseTTSReturn {
         body: JSON.stringify({ text, personaId, speed: voiceConfig?.speed || 1.0, provider: useApi }),
         signal: controller.signal,
       })
-        .then((res) => {
+        .then(async (res) => {
           if (!res.ok) throw new Error(`API returned ${res.status}`);
-          return res.blob();
-        })
-        .then((blob) => {
-          // Notify recorder so TTS audio gets mixed into the session recording
+
+          const audio = audioElRef.current;
+          if (!audio) throw new Error("No audio element");
+
+          audio.volume = 1.0;
+
+          // For ElevenLabs streaming: pipe chunks to MediaSource for low-latency playback.
+          // Simultaneously accumulate all chunks so the full blob can be provided to the
+          // recorder for session mixing — mixing only needs it after playback finishes.
+          const canStream = useApi === "elevenlabs" &&
+            res.body != null &&
+            typeof MediaSource !== "undefined" &&
+            MediaSource.isTypeSupported("audio/mpeg");
+
+          if (canStream) {
+            const allChunks: Uint8Array[] = [];
+            const reader = res.body!.getReader();
+            const ms = new MediaSource();
+            const msUrl = URL.createObjectURL(ms);
+            audio.src = msUrl;
+
+            audio.onended = () => {
+              setIsSpeaking(false);
+              setSpeakingText("");
+              log("Playback finished (streaming)");
+            };
+            audio.onerror = (e) => {
+              log(`Playback error (streaming): ${(e as any)?.message || "unknown"}`);
+              setIsSpeaking(false);
+              setSpeakingText("");
+            };
+
+            await new Promise<void>((resolve, reject) => {
+              ms.addEventListener("sourceopen", async () => {
+                URL.revokeObjectURL(msUrl);
+                let sb: SourceBuffer;
+                try {
+                  sb = ms.addSourceBuffer("audio/mpeg");
+                } catch (e) {
+                  reject(e);
+                  return;
+                }
+
+                const waitForUpdate = () =>
+                  new Promise<void>((r) => sb.addEventListener("updateend", () => r(), { once: true }));
+
+                let playStarted = false;
+                try {
+                  while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) {
+                      if (sb.updating) await waitForUpdate();
+                      ms.endOfStream();
+                      // Provide full blob to recorder for session mixing
+                      const totalSize = allChunks.reduce((s, c) => s + c.byteLength, 0);
+                      const merged = new Uint8Array(totalSize);
+                      let offset = 0;
+                      for (const c of allChunks) { merged.set(c, offset); offset += c.byteLength; }
+                      onAudioBlobRef.current?.(new Blob([merged], { type: "audio/mpeg" }));
+                      resolve();
+                      break;
+                    }
+                    allChunks.push(value);
+                    if (sb.updating) await waitForUpdate();
+                    sb.appendBuffer(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength));
+                    await waitForUpdate();
+                    if (!playStarted) {
+                      playStarted = true;
+                      audio.play().then(() => log("Playing (streaming — low latency)")).catch(() => {});
+                    }
+                  }
+                } catch (err: any) {
+                  if (err.name !== "AbortError") reject(err);
+                  else resolve();
+                }
+              }, { once: true });
+            });
+            return;
+          }
+
+          // Fallback: buffer full response (OpenAI or MediaSource not supported)
+          const blob = await res.blob();
           onAudioBlobRef.current?.(blob);
 
           const url = URL.createObjectURL(blob);
           log(`Got audio blob (${blob.size} bytes), playing...`);
 
-          // Use the persistent pre-blessed audio element
-          const audio = audioElRef.current;
-          if (!audio) throw new Error("No audio element");
-
           audio.src = url;
-          audio.volume = 1.0;
 
           audio.onended = () => {
             setIsSpeaking(false);
@@ -190,9 +263,8 @@ export function useTTS(options?: UseTTSOptions): UseTTSReturn {
             URL.revokeObjectURL(url);
           };
 
-          return audio.play().then(() => {
-            log("Playing audio successfully");
-          });
+          await audio.play();
+          log("Playing audio successfully");
         })
         .catch((err) => {
           if (err.name === "AbortError") return;

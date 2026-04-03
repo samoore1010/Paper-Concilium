@@ -170,7 +170,7 @@ app.post("/api/tts/stream", async (req, res) => {
         body: JSON.stringify({
           text,
           model_id: "eleven_multilingual_v2",
-          optimize_streaming_latency: 3, // Balance quality + speed
+          optimize_streaming_latency: 4, // Max speed (slight quality tradeoff is acceptable for real-time)
           voice_settings: { stability: 0.5, similarity_boost: 0.75 },
         }),
       });
