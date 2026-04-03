@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PERSONA_LIBRARY, PERSONA_PACKS, ARCHETYPE_DISCLAIMER, Persona, PersonaPack } from "../data/personas";
 import { MiiAvatar } from "./MiiAvatar";
+import ScrollFadeContainer from "./ScrollFadeContainer";
 import { getRecentSessions, SessionRecord } from "../data/sessionHistory";
 import {
   CollectionProgress,
@@ -373,7 +374,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
                     Ready!
                   </button>
                 </div>
-                <div className="flex gap-3 overflow-x-auto pb-1">
+                <ScrollFadeContainer className="flex gap-3 overflow-x-auto pb-1">
                   {selectedPersonas.map((persona) => (
                     <motion.button
                       key={persona.id}
@@ -399,7 +400,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
                       <span className="text-[9px] text-white/50 font-medium">{persona.name.split(" ")[0]}</span>
                     </motion.button>
                   ))}
-                </div>
+                </ScrollFadeContainer>
               </motion.div>
             )}
           </AnimatePresence>

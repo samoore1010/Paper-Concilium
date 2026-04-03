@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { FeedbackItem } from "../data/feedbackEngine";
 import { PERSONA_LIBRARY } from "../data/personas";
 import { MiiAvatar } from "./MiiAvatar";
+import ScrollFadeContainer from "./ScrollFadeContainer";
 import { getSessionHistory, SessionRecord } from "../data/sessionHistory";
 import { SessionPlayback, generateSessionEvents } from "./SessionPlayback";
 import { SessionRecordingData } from "./MeetingRoom";
@@ -106,7 +107,10 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
             <div className="flex flex-col md:flex-row gap-4 md:gap-6">
               {/* Persona list — horizontal scroll on mobile, vertical on desktop */}
               <div className="md:w-56 flex-shrink-0">
-                <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-x-visible pb-2 md:pb-0 -mx-1 px-1 md:mx-0 md:px-0 md:space-y-2">
+                <ScrollFadeContainer
+                  className="flex md:flex-col gap-2 overflow-x-auto md:overflow-x-visible pb-2 md:pb-0 -mx-1 px-1 md:mx-0 md:px-0 md:space-y-2"
+                  fadeColor="#0f0f23"
+                >
                   {feedback.map((fb, i) => {
                     const p = PERSONA_LIBRARY.find((pp) => pp.id === fb.personaId);
                     if (!p) return null;
@@ -128,7 +132,7 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
                       </button>
                     );
                   })}
-                </div>
+                </ScrollFadeContainer>
               </div>
 
               {/* Detail panel */}
