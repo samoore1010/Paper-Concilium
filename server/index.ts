@@ -316,7 +316,7 @@ app.post("/api/generate-script", async (req, res) => {
 
   // Source-material-aware generation uses Sonnet for quality; plain generation uses Haiku
   const isFromMaterials = !!sourceContext?.combinedText;
-  const model = isFromMaterials ? "claude-sonnet-4-5-20250514" : "claude-haiku-4-5-20251001";
+  const model = isFromMaterials ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001";
 
   try {
     const sourceLabel = isFromMaterials
