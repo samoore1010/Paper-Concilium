@@ -1,4 +1,5 @@
 import { SpeechMetrics } from "../hooks/useSpeechMetrics";
+import { VisualMetricsSnapshot } from "../hooks/useVisualAnalysis";
 
 export interface ProsodyRecord {
   averageVolume: number;
@@ -30,6 +31,7 @@ export interface SessionRecord {
   duration: number;
   speechMetrics: SpeechMetrics;
   prosodyMetrics?: ProsodyRecord;
+  visualMetrics?: VisualMetricsSnapshot;
   feedback?: StoredFeedback[];
   transcript?: string;
 }
