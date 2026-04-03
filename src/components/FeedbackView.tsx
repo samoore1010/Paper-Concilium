@@ -16,7 +16,7 @@ interface FeedbackViewProps {
   onViewProgress?: () => void;
 }
 
-export function FeedbackView({ feedback, transcript, recordingData, onNewSession, onViewSession, onViewProgress }: FeedbackViewProps) {
+export function FeedbackView({ feedback, transcript, recordingData, onViewSession }: FeedbackViewProps) {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [tab, setTab] = useState<"feedback" | "recording" | "history">("feedback");
   const [sessionHistory, setSessionHistory] = useState<SessionRecord[]>([]);
@@ -40,28 +40,7 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
   const scoreBar = (s: number) => s >= 7 ? "bg-emerald-400" : s >= 5 ? "bg-yellow-400" : "bg-red-400";
 
   return (
-    <div className="min-h-[100dvh] bg-surface-base text-white">
-      {/* Header */}
-      <header className="border-b border-white/5 px-4 md:px-6 py-3 md:py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-base md:text-lg font-semibold">Session Feedback</h1>
-            <p className="text-label md:text-xs text-white/40">Review critiques from your audience</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {onViewProgress && (
-              <button onClick={onViewProgress} className="px-3 md:px-4 py-1.5 md:py-2 border border-white/10 hover:bg-white/5 rounded-lg text-xs md:text-sm font-medium text-white/60 transition-colors">
-                View Progress
-              </button>
-            )}
-            <button onClick={onNewSession} className="px-3 md:px-4 py-1.5 md:py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-xs md:text-sm font-medium">
-              New Session
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-6xl mx-auto px-4 md:px-6 py-4 md:py-8">
+    <div className="px-4 md:px-6 py-4 md:py-8">
         {/* Tabs */}
         <div className="flex gap-4 mb-section-sm md:mb-section border-b border-white/5">
           <button onClick={() => setTab("feedback")} className={`px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm font-medium border-b-2 ${tab === "feedback" ? "border-blue-400 text-white" : "border-transparent text-white/50"}`}>
@@ -294,7 +273,6 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
             )}
           </div>
         )}
-      </div>
     </div>
   );
 }

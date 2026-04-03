@@ -17,9 +17,6 @@ interface PersonaSelectorProps {
   onStartSession: (personas: Persona[], sessionType: string) => void;
   onViewSession?: (session: SessionRecord) => void;
   collection: CollectionProgress;
-  onViewCollection?: () => void;
-  onPractice?: () => void;
-  onProgress?: () => void;
 }
 
 const SESSION_TYPES = [
@@ -36,7 +33,7 @@ const PACK_COLORS: Record<PersonaPack, string> = {
   "business-tank": "#d4a017",
 };
 
-export function PersonaSelector({ onStartSession, onViewSession, collection, onViewCollection, onPractice, onProgress }: PersonaSelectorProps) {
+export function PersonaSelector({ onStartSession, onViewSession, collection }: PersonaSelectorProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sessionType, setSessionType] = useState("business-pitch");
   const [activePack, setActivePack] = useState<PersonaPack>("general");
@@ -96,54 +93,18 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
   const selectedPersonas = PERSONA_LIBRARY.filter((p) => selected.has(p.id));
 
   return (
-    <div className="min-h-screen bg-surface-base text-white">
-      {/* Header */}
-      <header className="border-b border-white/5 px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-blue-500 flex items-center justify-center font-bold text-sm">PP</div>
-            <div>
-              <h1 className="text-lg font-semibold tracking-tight">PitchPractice</h1>
-              <p className="text-xs text-white/40">AI Audience Simulator</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            {onProgress && (
-              <button
-                onClick={onProgress}
-                className="px-4 py-2.5 border border-white/5 hover:bg-surface-overlay rounded-lg text-sm font-medium transition-colors text-white/60"
-              >
-                Progress
-              </button>
-            )}
-            {onPractice && (
-              <button
-                onClick={onPractice}
-                className="px-4 py-2.5 border border-white/5 hover:bg-surface-overlay rounded-lg text-sm font-medium transition-colors text-white/60"
-              >
-                Practice
-              </button>
-            )}
-            {onViewCollection && (
-              <button
-                onClick={onViewCollection}
-                className="px-4 py-2.5 border border-white/5 hover:bg-surface-overlay rounded-lg text-sm font-medium transition-colors text-white/60"
-              >
-                Collection
-              </button>
-            )}
-            <button
-              onClick={() => onStartSession(selectedPersonas, sessionType)}
-              disabled={selected.size === 0}
-              className="px-5 py-2.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
-            >
-              Start Session ({selected.size})
-            </button>
-          </div>
+    <div className="px-6 py-8">
+      {/* Start session button — sticky at bottom */}
+      {selected.size > 0 && (
+        <div className="fixed bottom-6 right-6 z-30">
+          <button
+            onClick={() => onStartSession(selectedPersonas, sessionType)}
+            className="px-5 py-2.5 bg-blue-500 hover:bg-blue-600 rounded-lg text-sm font-medium transition-colors shadow-lg shadow-blue-500/25"
+          >
+            Start Session ({selected.size})
+          </button>
         </div>
-      </header>
-
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      )}
         {/* Recent Sessions */}
         {recentSessions.length > 0 && (
           <section className="mb-section-sm md:mb-section">
@@ -425,7 +386,6 @@ export function PersonaSelector({ onStartSession, onViewSession, collection, onV
             )}
           </AnimatePresence>
         </section>
-      </div>
     </div>
   );
 }

@@ -11,36 +11,21 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import {
-  ArrowLeft,
   TrendingUp,
   Trophy,
   Clock,
   Mic,
   Activity,
-  Trash2,
   Calendar,
 } from "lucide-react";
-import { getSessionHistory, clearHistory, SessionRecord } from "../data/sessionHistory";
+import { getSessionHistory, SessionRecord } from "../data/sessionHistory";
 
 interface ProgressDashboardProps {
   onBack: () => void;
 }
 
 export function ProgressDashboard({ onBack }: ProgressDashboardProps) {
-  const [sessions, setSessions] = useState<SessionRecord[]>(getSessionHistory);
-  const [confirmClear, setConfirmClear] = useState(false);
-
-  const handleClear = () => {
-    if (confirmClear) {
-      clearHistory();
-      setSessions([]);
-      setConfirmClear(false);
-    } else {
-      setConfirmClear(true);
-      setTimeout(() => setConfirmClear(false), 3000);
-    }
-  };
-
+  const [sessions] = useState<SessionRecord[]>(getSessionHistory);
   // === DERIVED DATA ===
   const scoreData = useMemo(
     () =>
@@ -115,30 +100,7 @@ export function ProgressDashboard({ onBack }: ProgressDashboardProps) {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-white">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-[#0a0a0f]/80 backdrop-blur-md border-b border-white/5">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <button onClick={onBack} className="flex items-center gap-2 text-white/60 hover:text-white transition-colors text-sm">
-            <ArrowLeft className="w-4 h-4" />
-            Back
-          </button>
-          <h1 className="text-subtitle font-semibold">Progress Dashboard</h1>
-          <button
-            onClick={handleClear}
-            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors ${
-              confirmClear
-                ? "bg-red-500/20 text-red-400 border border-red-500/30"
-                : "text-white/40 hover:text-white/60 hover:bg-white/5"
-            }`}
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            {confirmClear ? "Confirm Clear" : "Clear History"}
-          </button>
-        </div>
-      </div>
-
-      <div className="max-w-5xl mx-auto px-4 py-section-sm md:py-section space-y-section-sm md:space-y-section">
+    <div className="px-4 py-section-sm md:py-section space-y-section-sm md:space-y-section">
         {/* Summary Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <SummaryCard
@@ -254,7 +216,6 @@ export function ProgressDashboard({ onBack }: ProgressDashboardProps) {
             </div>
           </div>
         )}
-      </div>
     </div>
   );
 }
