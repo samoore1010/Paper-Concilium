@@ -23,8 +23,8 @@ export interface PersonaPrompt {
  *
  * Falls back to "maria-chen" if the persona ID is unknown.
  */
-export function getPersonaPrompt(personaId: string, sessionType = "business-pitch"): PersonaPrompt {
-  const composed = composePersonaPrompt(personaId, sessionType)
+export function getPersonaPrompt(personaId: string, sessionType = "business-pitch", customName?: string): PersonaPrompt {
+  const composed = composePersonaPrompt(personaId, sessionType, customName)
     ?? composePersonaPrompt("maria-chen", sessionType);
   // maria-chen is always defined, so this is safe
   return composed as PersonaPrompt;

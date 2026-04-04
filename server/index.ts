@@ -86,6 +86,34 @@ function resolveVoiceId(personaId: string): string {
 customVoiceConfig = loadVoiceConfig();
 console.log(`[VoiceConfig] Loaded ${Object.keys(customVoiceConfig).length} custom voice mapping(s)`);
 
+// === Character Config Persistence ===
+
+const CHARACTER_CONFIG_PATH = path.join(__dirname, "../data/character-config.json");
+let customCharacterNames: Record<string, string> = {};
+
+function loadCharacterConfig(): Record<string, string> {
+  try {
+    if (fs.existsSync(CHARACTER_CONFIG_PATH)) {
+      const raw = fs.readFileSync(CHARACTER_CONFIG_PATH, "utf-8");
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && parsed.names) return parsed.names;
+    }
+  } catch (err: any) {
+    console.error("[CharacterConfig] Failed to load:", err.message);
+  }
+  return {};
+}
+
+function saveCharacterConfig(names: Record<string, string>): void {
+  const dir = path.dirname(CHARACTER_CONFIG_PATH);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(CHARACTER_CONFIG_PATH, JSON.stringify({ names }, null, 2), "utf-8");
+}
+
+// Load custom character config at startup
+customCharacterNames = loadCharacterConfig();
+console.log(`[CharacterConfig] Loaded ${Object.keys(customCharacterNames).length} custom name(s)`);
+
 // === Health Check ===
 
 app.get("/api/health", (_req, res) => {
@@ -445,7 +473,7 @@ app.post("/api/react", async (req, res) => {
 
   const effectiveSessionType = sessionType || "business-pitch";
   try {
-    const persona = getPersonaPrompt(personaId, effectiveSessionType);
+    const persona = getPersonaPrompt(personaId, effectiveSessionType, customCharacterNames[personaId] || undefined);
     const prompt = buildReactionPrompt(persona, userText, effectiveSessionType, messageHistory || [], sourceContext || undefined);
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001", max_tokens: 300,
@@ -472,7 +500,7 @@ app.post("/api/react-batch", async (req, res) => {
   try {
     const results = await Promise.allSettled(
       personaIds.map(async (personaId: string) => {
-        const persona = getPersonaPrompt(personaId, effectiveSessionType);
+        const persona = getPersonaPrompt(personaId, effectiveSessionType, customCharacterNames[personaId] || undefined);
         const prompt = buildReactionPrompt(persona, userText, effectiveSessionType, messageHistory || [], sourceContext || undefined);
         const message = await client.messages.create({
           model: "claude-haiku-4-5-20251001", max_tokens: 300,
@@ -505,7 +533,7 @@ app.post("/api/feedback", async (req, res) => {
 
   const effectiveSessionType = sessionType || "business-pitch";
   try {
-    const persona = getPersonaPrompt(personaId, effectiveSessionType);
+    const persona = getPersonaPrompt(personaId, effectiveSessionType, customCharacterNames[personaId] || undefined);
     const prompt = buildFeedbackPrompt(persona, transcript, effectiveSessionType);
     console.log(`[Feedback] Generating for ${personaId}...`);
 
@@ -539,7 +567,7 @@ app.post("/api/feedback-batch", async (req, res) => {
     const feedback: any[] = [];
     for (const personaId of personaIds) {
       try {
-        const persona = getPersonaPrompt(personaId, effectiveSessionType);
+        const persona = getPersonaPrompt(personaId, effectiveSessionType, customCharacterNames[personaId] || undefined);
         const prompt = buildFeedbackPrompt(persona, transcript, effectiveSessionType);
         const message = await client.messages.create({
           model: "claude-sonnet-4-6", max_tokens: 1500,
@@ -720,13 +748,43 @@ app.put("/api/admin/voice-config", (req, res) => {
   }
 
   try {
-    saveVoiceConfig(cleaned);
     customVoiceConfig = cleaned;
+    saveVoiceConfig(cleaned);
     console.log(`[VoiceConfig] Saved ${Object.keys(cleaned).length} custom voice mapping(s)`);
     res.json({ saved: true, count: Object.keys(cleaned).length });
   } catch (err: any) {
     console.error("[VoiceConfig] Save error:", err.message);
     res.status(500).json({ error: "Failed to save voice config", detail: err.message });
+  }
+});
+
+// === Admin Character Config ===
+
+app.get("/api/admin/character-config", (_req, res) => {
+  res.json({ names: customCharacterNames });
+});
+
+app.put("/api/admin/character-config", (req, res) => {
+  const { names } = req.body;
+  if (!names || typeof names !== "object") {
+    return res.status(400).json({ error: "names object required" });
+  }
+
+  const cleaned: Record<string, string> = {};
+  for (const [key, value] of Object.entries(names)) {
+    if (typeof value === "string" && value.trim()) {
+      cleaned[key] = value.trim();
+    }
+  }
+
+  try {
+    customCharacterNames = cleaned;
+    saveCharacterConfig(cleaned);
+    console.log(`[CharacterConfig] Saved ${Object.keys(cleaned).length} custom name(s)`);
+    res.json({ saved: true, count: Object.keys(cleaned).length });
+  } catch (err: any) {
+    console.error("[CharacterConfig] Save error:", err.message);
+    res.status(500).json({ error: "Failed to save character config", detail: err.message });
   }
 });
 
