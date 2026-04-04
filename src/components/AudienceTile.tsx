@@ -22,9 +22,11 @@ interface AudienceTileProps {
   showEntrance?: boolean;
   /** Reaction intensity 0.3-1.0 from LLM, drives animation amplitude */
   reactionIntensity?: number;
+  /** Hide the question bubble (used on mobile where a single floating card is shown instead) */
+  hideQuestionBubble?: boolean;
 }
 
-export function AudienceTile({ persona, reaction, reactionEmoji, isActive, isMuted = true, isSpeaking, pendingQuestion, onQuestionClick, onClick, themeAccentColor, characterContext, showEntrance, reactionIntensity }: AudienceTileProps) {
+export function AudienceTile({ persona, reaction, reactionEmoji, isActive, isMuted = true, isSpeaking, pendingQuestion, onQuestionClick, onClick, themeAccentColor, characterContext, showEntrance, reactionIntensity, hideQuestionBubble }: AudienceTileProps) {
   const getReactionGlowClass = () => {
     if (isSpeaking) return "reaction-glow-speaking";
     if (reaction === "nod" || reaction === "smile") return "reaction-glow-positive";
@@ -37,9 +39,9 @@ export function AudienceTile({ persona, reaction, reactionEmoji, isActive, isMut
 
   return (
     <div className="relative h-full" style={{ perspective: 600 }}>
-      {/* Question bubble floating above tile */}
+      {/* Question bubble floating above tile (hidden on mobile when hideQuestionBubble is set) */}
       <AnimatePresence>
-        {pendingQuestion && !isSpeaking && (
+        {pendingQuestion && !isSpeaking && !hideQuestionBubble && (
           <motion.button
             initial={{ opacity: 0, y: 10, scale: 0.8 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
