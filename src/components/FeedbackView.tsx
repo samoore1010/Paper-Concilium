@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import { CheckCircle, ArrowUpCircle, RotateCcw, BarChart3 } from "lucide-react";
 import { FeedbackItem } from "../data/feedbackEngine";
 import { PERSONA_LIBRARY } from "../data/personas";
 import { MiiAvatar } from "./MiiAvatar";
@@ -16,7 +18,87 @@ interface FeedbackViewProps {
   onViewProgress?: () => void;
 }
 
-export function FeedbackView({ feedback, transcript, recordingData, onViewSession }: FeedbackViewProps) {
+// --- Radial Progress Ring ---
+function ScoreRing({ score, size = 120 }: { score: number; size?: number }) {
+  const radius = (size - 12) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const progress = (score / 10) * circumference;
+  const strokeColor = score >= 7 ? "#34d399" : score >= 5 ? "#facc15" : "#f87171";
+
+  return (
+    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="rgba(255,255,255,0.08)"
+          strokeWidth={6}
+        />
+        <motion.circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth={6}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          initial={{ strokeDashoffset: circumference }}
+          animate={{ strokeDashoffset: circumference - progress }}
+          transition={{ duration: 1, ease: "easeOut" }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-3xl md:text-4xl font-bold" style={{ color: strokeColor }}>{score}</span>
+        <span className="text-caption text-white/30">/ 10</span>
+      </div>
+    </div>
+  );
+}
+
+// --- Delivery Stat with per-metric threshold config ---
+interface DeliveryStatProps {
+  label: string;
+  value: number;
+  unit: string;
+  advice: string;
+  invertColor?: boolean; // true = high value is bad (e.g., Silence Ratio)
+  lowIsBad?: boolean;    // true = low value is bad (e.g., Volume Dynamics)
+}
+
+function DeliveryStat({ label, value, unit, advice, invertColor, lowIsBad }: DeliveryStatProps) {
+  let color: string;
+  let barColor: string;
+
+  if (invertColor) {
+    // High = bad (Silence Ratio): high values are red, low values are green
+    color = value > 60 ? "text-red-400" : value > 30 ? "text-yellow-400" : "text-emerald-400";
+    barColor = value > 60 ? "bg-red-400" : value > 30 ? "bg-yellow-400" : "bg-emerald-400";
+  } else if (lowIsBad) {
+    // Low = bad (Volume Dynamics): low values are red, high values are green
+    color = value < 15 ? "text-red-400" : value < 30 ? "text-yellow-400" : "text-emerald-400";
+    barColor = value < 15 ? "bg-red-400" : value < 30 ? "bg-yellow-400" : "bg-emerald-400";
+  } else {
+    // Default: low = bad, high = good
+    color = value < 20 ? "text-red-400" : value > 70 ? "text-emerald-400" : "text-yellow-400";
+    barColor = value < 20 ? "bg-red-400" : value > 70 ? "bg-emerald-400" : "bg-yellow-400";
+  }
+
+  return (
+    <div className="bg-surface-raised rounded-lg p-3">
+      <div className="text-caption text-white/50 mb-1">{label}</div>
+      <div className={`text-lg font-bold ${color}`}>{value}{unit}</div>
+      <div className="w-full h-1 rounded-full bg-white/10 mt-1 overflow-hidden">
+        <div className={`h-full ${barColor}`} style={{ width: `${Math.min(100, value)}%` }} />
+      </div>
+      <div className="text-caption text-white/30 mt-1">{advice}</div>
+    </div>
+  );
+}
+
+export function FeedbackView({ feedback, transcript, recordingData, onNewSession, onViewSession, onViewProgress }: FeedbackViewProps) {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [tab, setTab] = useState<"feedback" | "recording" | "history">("feedback");
   const [sessionHistory, setSessionHistory] = useState<SessionRecord[]>([]);
@@ -27,7 +109,6 @@ export function FeedbackView({ feedback, transcript, recordingData, onViewSessio
 
   useEffect(() => { setSessionHistory(getSessionHistory()); }, []);
 
-  // Get the most recent session (the one we just completed) for prosody/visual data
   const latestSession = sessionHistory.length > 0 ? sessionHistory[sessionHistory.length - 1] : null;
   const prosody = latestSession?.prosodyMetrics;
   const visual = latestSession?.visualMetrics;
@@ -39,41 +120,43 @@ export function FeedbackView({ feedback, transcript, recordingData, onViewSessio
   const scoreBg = (s: number) => s >= 7 ? "bg-emerald-500/10 border-emerald-500/20" : s >= 5 ? "bg-yellow-500/10 border-yellow-500/20" : "bg-red-500/10 border-red-500/20";
   const scoreBar = (s: number) => s >= 7 ? "bg-emerald-400" : s >= 5 ? "bg-yellow-400" : "bg-red-400";
 
+  const tabs = [
+    { key: "feedback" as const, label: "Feedback", color: "border-blue-400" },
+    ...(recordingData ? [{ key: "recording" as const, label: "Recording", color: "border-purple-400" }] : []),
+    { key: "history" as const, label: "History", color: "border-blue-400" },
+  ];
+
   return (
     <div className="px-4 md:px-6 py-4 md:py-8">
-        {/* Tabs */}
-        <div className="flex gap-4 mb-section-sm md:mb-section border-b border-white/5">
-          <button onClick={() => setTab("feedback")} className={`px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm font-medium border-b-2 ${tab === "feedback" ? "border-blue-400 text-white" : "border-transparent text-white/50"}`}>
-            Feedback
-          </button>
-          {recordingData && (
-            <button onClick={() => setTab("recording")} className={`px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm font-medium border-b-2 ${tab === "recording" ? "border-purple-400 text-white" : "border-transparent text-white/50"}`}>
-              Recording
+        {/* Animated Tabs */}
+        <div className="relative flex gap-4 mb-section-sm md:mb-section border-b border-white/5">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`relative px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm font-medium ${tab === t.key ? "text-white" : "text-white/50"}`}
+            >
+              {t.label}
+              {tab === t.key && (
+                <motion.div
+                  layoutId="feedback-tab-indicator"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-400"
+                  transition={{ type: "spring", stiffness: 350, damping: 30 }}
+                />
+              )}
             </button>
-          )}
-          <button onClick={() => setTab("history")} className={`px-3 md:px-4 py-2 md:py-3 text-xs md:text-sm font-medium border-b-2 ${tab === "history" ? "border-blue-400 text-white" : "border-transparent text-white/50"}`}>
-            History
-          </button>
+          ))}
         </div>
 
         {tab === "feedback" && (
           <>
-            {/* Summary — responsive grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 md:gap-4 mb-section-sm md:mb-section">
-              <div className={`rounded-lg border p-3 md:p-4 ${scoreBg(avgScore)}`}>
-                <div className="text-caption md:text-xs text-white/50 mb-0.5">Score</div>
-                <div className={`text-xl md:text-3xl font-bold ${scoreColor(avgScore)}`}>{avgScore}</div>
-                <div className="text-caption text-white/30">out of 10</div>
-              </div>
-              <div className="rounded-lg border border-white/5 bg-surface-raised p-3 md:p-4">
-                <div className="text-caption md:text-xs text-white/50 mb-0.5">Audience</div>
-                <div className="text-xl md:text-3xl font-bold">{feedback.length}</div>
-                <div className="text-caption text-white/30">personas</div>
-              </div>
-              <div className="rounded-lg border border-white/5 bg-surface-raised p-3 md:p-4">
-                <div className="text-caption md:text-xs text-white/50 mb-0.5">Words</div>
-                <div className="text-xl md:text-3xl font-bold">{transcript.split(/\s+/).filter(Boolean).length}</div>
-                <div className="text-caption text-white/30">spoken</div>
+            {/* Hero Score — centered radial ring with inline stats */}
+            <div className="flex flex-col items-center text-center mb-section-sm md:mb-section">
+              <ScoreRing score={avgScore} size={140} />
+              <div className="flex items-center gap-4 mt-3 text-xs md:text-sm text-white/50">
+                <span>{feedback.length} persona{feedback.length !== 1 ? "s" : ""}</span>
+                <span className="w-px h-3 bg-white/10" />
+                <span>{transcript.split(/\s+/).filter(Boolean).length} words spoken</span>
               </div>
             </div>
 
@@ -86,10 +169,10 @@ export function FeedbackView({ feedback, transcript, recordingData, onViewSessio
                 <h3 className="text-xs md:text-sm font-medium text-white/70 mb-3">Delivery Analysis</h3>
                 <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
                   <DeliveryStat label="Volume" value={prosody.averageVolume} unit="%" advice={prosody.averageVolume < 20 ? "Speak louder" : prosody.averageVolume > 80 ? "Too loud" : "Good"} />
-                  <DeliveryStat label="Volume Dynamics" value={prosody.volumeVariation} unit="%" advice={prosody.volumeVariation < 15 ? "Too monotone" : "Good variety"} />
+                  <DeliveryStat label="Volume Dynamics" value={prosody.volumeVariation} unit="%" advice={prosody.volumeVariation < 15 ? "Too monotone" : "Good variety"} lowIsBad />
                   <DeliveryStat label="Pitch Variety" value={prosody.pitchVariation} unit="%" advice={prosody.pitchVariation < 10 ? "Monotone" : "Expressive"} />
                   <DeliveryStat label="Energy" value={prosody.energyLevel} unit="%" advice={prosody.energyLevel < 20 ? "Low" : prosody.energyLevel > 70 ? "High" : "Moderate"} />
-                  <DeliveryStat label="Silence" value={prosody.silenceRatio} unit="%" advice={prosody.silenceRatio > 60 ? "Too many pauses" : "Good pace"} />
+                  <DeliveryStat label="Silence" value={prosody.silenceRatio} unit="%" advice={prosody.silenceRatio > 60 ? "Too many pauses" : "Good pace"} invertColor />
                 </div>
               </div>
             )}
@@ -145,15 +228,17 @@ export function FeedbackView({ feedback, transcript, recordingData, onViewSessio
               {/* Detail panel */}
               {selected && persona && (
                 <div className="flex-1 space-y-4 md:space-y-6">
-                  {/* Persona header */}
-                  <div className="flex items-start gap-3 md:gap-5">
+                  {/* Compact Persona header — 48px avatar, name+score on one row, tags inline */}
+                  <div className="flex items-center gap-3">
                     <div className="flex-shrink-0">
-                      <MiiAvatar persona={persona} size={70} reaction={selected.overallScore >= 6 ? "smile" : selected.overallScore >= 4 ? "think" : "frown"} />
+                      <MiiAvatar persona={persona} size={48} reaction={selected.overallScore >= 6 ? "smile" : selected.overallScore >= 4 ? "think" : "frown"} />
                     </div>
-                    <div className="min-w-0">
-                      <h2 className="text-base md:text-xl font-semibold mb-1">{persona.name}</h2>
-                      <p className="text-xs md:text-sm text-white/50 mb-2 line-clamp-2">{persona.bio}</p>
-                      <div className="flex flex-wrap gap-1.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <h2 className="text-sm md:text-base font-semibold truncate">{persona.name}</h2>
+                        <span className={`text-sm font-bold ${scoreColor(selected.overallScore)}`}>{selected.overallScore}/10</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
                         <span className="text-caption px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300">{persona.profession}</span>
                         <span className="text-caption px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300">{persona.politicalLeaning}</span>
                         <span className="text-caption px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-300">{persona.communicationStyle}</span>
@@ -161,7 +246,7 @@ export function FeedbackView({ feedback, transcript, recordingData, onViewSessio
                     </div>
                   </div>
 
-                  {/* Score */}
+                  {/* Score bar */}
                   <div className={`rounded-lg border p-4 md:p-5 ${scoreBg(selected.overallScore)}`}>
                     <div className="flex items-center gap-3 md:gap-4 mb-2 md:mb-3">
                       <div className={`text-3xl md:text-4xl font-bold ${scoreColor(selected.overallScore)}`}>{selected.overallScore}</div>
@@ -181,14 +266,15 @@ export function FeedbackView({ feedback, transcript, recordingData, onViewSessio
                     <p className="text-xs md:text-sm text-white/60 leading-relaxed">{selected.summary}</p>
                   </div>
 
-                  {/* Strengths & Weaknesses — stack on mobile, side-by-side on desktop */}
+                  {/* Strengths & Weaknesses — Lucide icons with left-border accent */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                     <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 md:p-5">
                       <h3 className="text-xs md:text-sm font-medium text-emerald-400 mb-2 md:mb-3">Strengths</h3>
                       <ul className="space-y-1.5 md:space-y-2">
                         {selected.strengths.map((s, i) => (
-                          <li key={i} className="text-xs md:text-sm text-white/60 flex items-start gap-2">
-                            <span className="text-emerald-400 mt-0.5">+</span>{s}
+                          <li key={i} className="text-xs md:text-sm text-white/60 flex items-start gap-2 pl-2 border-l-2 border-emerald-500/30">
+                            <CheckCircle className="w-3.5 h-3.5 text-emerald-400 mt-0.5 flex-shrink-0" />
+                            {s}
                           </li>
                         ))}
                       </ul>
@@ -197,8 +283,9 @@ export function FeedbackView({ feedback, transcript, recordingData, onViewSessio
                       <h3 className="text-xs md:text-sm font-medium text-red-400 mb-2 md:mb-3">Areas for Improvement</h3>
                       <ul className="space-y-1.5 md:space-y-2">
                         {selected.weaknesses.map((w, i) => (
-                          <li key={i} className="text-xs md:text-sm text-white/60 flex items-start gap-2">
-                            <span className="text-red-400 mt-0.5">-</span>{w}
+                          <li key={i} className="text-xs md:text-sm text-white/60 flex items-start gap-2 pl-2 border-l-2 border-red-500/30">
+                            <ArrowUpCircle className="w-3.5 h-3.5 text-red-400 mt-0.5 flex-shrink-0" />
+                            {w}
                           </li>
                         ))}
                       </ul>
@@ -212,6 +299,27 @@ export function FeedbackView({ feedback, transcript, recordingData, onViewSessio
                     <p className="text-caption md:text-xs text-white/30 mt-1.5 md:mt-2">— {persona.name}, {persona.profession}</p>
                   </div>
                 </div>
+              )}
+            </div>
+
+            {/* Post-Feedback CTA */}
+            <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mt-section-sm md:mt-section mb-section-sm md:mb-section" />
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button
+                onClick={onNewSession}
+                className="flex items-center gap-2 px-6 py-3 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Practice Again
+              </button>
+              {onViewProgress && (
+                <button
+                  onClick={onViewProgress}
+                  className="flex items-center gap-2 px-6 py-3 rounded-lg border border-white/10 bg-surface-raised hover:bg-surface-overlay text-white/70 text-sm font-medium transition-colors"
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  View Progress
+                </button>
               )}
             </div>
           </>
@@ -273,21 +381,6 @@ export function FeedbackView({ feedback, transcript, recordingData, onViewSessio
             )}
           </div>
         )}
-    </div>
-  );
-}
-
-function DeliveryStat({ label, value, unit, advice }: { label: string; value: number; unit: string; advice: string }) {
-  const color = value < 20 ? "text-red-400" : value > 70 ? "text-emerald-400" : "text-yellow-400";
-  const barColor = value < 20 ? "bg-red-400" : value > 70 ? "bg-emerald-400" : "bg-yellow-400";
-  return (
-    <div className="bg-surface-raised rounded-lg p-3">
-      <div className="text-caption text-white/50 mb-1">{label}</div>
-      <div className={`text-lg font-bold ${color}`}>{value}{unit}</div>
-      <div className="w-full h-1 rounded-full bg-white/10 mt-1 overflow-hidden">
-        <div className={`h-full ${barColor}`} style={{ width: `${Math.min(100, value)}%` }} />
-      </div>
-      <div className="text-caption text-white/30 mt-1">{advice}</div>
     </div>
   );
 }
