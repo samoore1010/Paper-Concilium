@@ -17,6 +17,7 @@ interface PersonaSelectorProps {
   onStartSession: (personas: Persona[], sessionType: string) => void;
   onViewSession?: (session: SessionRecord) => void;
   collection: CollectionProgress;
+  customCharacterNames?: Record<string, string>;
 }
 
 /** Session type labels keyed by pack sessionType */
@@ -34,7 +35,8 @@ const PACK_COLORS: Record<PersonaPack, string> = {
   "business-tank": "#d4a017",
 };
 
-export function PersonaSelector({ onStartSession, onViewSession, collection }: PersonaSelectorProps) {
+export function PersonaSelector({ onStartSession, onViewSession, collection, customCharacterNames = {} }: PersonaSelectorProps) {
+  const getName = (persona: Persona) => customCharacterNames[persona.id] || persona.name;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sessionType, setSessionType] = useState("business-pitch");
   const [activePack, setActivePack] = useState<PersonaPack>("general");
@@ -226,7 +228,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection }: P
                         <div className={`text-caption font-medium mt-1 truncate w-full text-center ${
                           !unlocked ? "text-white/15" : "text-white/80"
                         }`}>
-                          {unlocked ? persona.name.split(" ")[0] : "???"}
+                          {unlocked ? getName(persona).split(" ")[0] : "???"}
                         </div>
 
                         {/* Lock icon overlay */}
@@ -275,6 +277,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection }: P
                     collection={collection}
                     packColor={packColor}
                     onToggle={() => togglePersona(spotlightPersona)}
+                    displayName={getName(spotlightPersona)}
                   />
                 ) : (
                   <motion.div
@@ -338,7 +341,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection }: P
                           </svg>
                         </div>
                       </div>
-                      <span className="text-caption text-white/50 font-medium">{persona.name.split(" ")[0]}</span>
+                      <span className="text-caption text-white/50 font-medium">{getName(persona).split(" ")[0]}</span>
                     </motion.button>
                   ))}
                 </ScrollFadeContainer>
@@ -417,6 +420,7 @@ function SpotlightPanel({
   collection,
   packColor,
   onToggle,
+  displayName,
 }: {
   persona: Persona;
   unlocked: boolean;
@@ -424,6 +428,7 @@ function SpotlightPanel({
   collection: CollectionProgress;
   packColor: string;
   onToggle: () => void;
+  displayName?: string;
 }) {
   const stats = getCharacterStats(collection, persona.id);
   const req = getUnlockRequirement(persona.id);
@@ -470,7 +475,7 @@ function SpotlightPanel({
         <div className="mb-3">
           <div className="flex items-center gap-2">
             <h3 className="text-lg font-semibold">
-              {unlocked ? persona.name : "???"}
+              {unlocked ? (displayName ?? persona.name) : "???"}
             </h3>
             {unlocked && (
               <span className="text-caption px-1.5 py-0.5 rounded bg-surface-overlay text-white/50">

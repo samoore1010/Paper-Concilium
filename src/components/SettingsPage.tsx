@@ -648,6 +648,17 @@ function CharacterNamesPanel({ showToast }: { showToast: (msg: string) => void }
               )}
             </button>
           </div>
+
+          {/* Permanent config hint */}
+          {Object.keys(customNames).length > 0 && (
+            <div className="mt-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+              <p className="text-[10px] text-amber-400/80 font-medium mb-1.5">To make permanent (survives Railway redeploys):</p>
+              <p className="text-[10px] text-white/40 mb-1.5">Set this Railway environment variable:</p>
+              <code className="block text-[10px] text-amber-300/70 bg-black/20 rounded px-2 py-1.5 break-all font-mono select-all">
+                CHARACTER_NAMES={JSON.stringify(customNames)}
+              </code>
+            </div>
+          )}
         </div>
       )}
     </SettingsPanel>
@@ -774,6 +785,17 @@ function VoiceConfigPanel({ showToast }: { showToast: (msg: string) => void }) {
               )}
             </button>
           </div>
+
+          {/* Permanent config hint */}
+          {config && Object.keys(config.custom).length > 0 && (
+            <div className="mt-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+              <p className="text-[10px] text-amber-400/80 font-medium mb-1.5">To make permanent (survives Railway redeploys):</p>
+              <p className="text-[10px] text-white/40 mb-1.5">Set this Railway environment variable:</p>
+              <code className="block text-[10px] text-amber-300/70 bg-black/20 rounded px-2 py-1.5 break-all font-mono select-all">
+                VOICE_CONFIG={JSON.stringify(config.custom)}
+              </code>
+            </div>
+          )}
         </div>
       )}
     </SettingsPanel>
