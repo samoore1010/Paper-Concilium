@@ -233,7 +233,7 @@ app.get("/api/scribe-token", async (_req, res) => {
 // === Streaming TTS Endpoint ===
 
 app.post("/api/tts/stream", async (req, res) => {
-  const { text, personaId, provider } = req.body;
+  const { text, personaId, voiceId: clientVoiceId, provider } = req.body;
   if (!text) return res.status(400).json({ error: "text required" });
 
   const apiKey = process.env.ELEVENLABS_API_KEY;
@@ -242,7 +242,10 @@ app.post("/api/tts/stream", async (req, res) => {
   // Use ElevenLabs streaming endpoint
   if (apiKey && (provider === "elevenlabs" || provider === "auto")) {
     try {
-      const voiceId = resolveVoiceId(personaId);
+      // Prefer client-provided voice ID (from user's localStorage config) over server-side lookup
+      const voiceId = (clientVoiceId && typeof clientVoiceId === "string" && clientVoiceId.trim())
+        ? clientVoiceId.trim()
+        : resolveVoiceId(personaId);
       console.log(`[TTS:Stream] ElevenLabs voice="${voiceId}" persona="${personaId}"`);
 
       const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`, {
@@ -300,14 +303,14 @@ app.post("/api/tts/stream", async (req, res) => {
 // === TTS Endpoint (multi-provider) ===
 
 app.post("/api/tts", async (req, res) => {
-  const { text, personaId, speed, provider } = req.body;
+  const { text, personaId, voiceId: clientVoiceId, speed, provider } = req.body;
   if (!text) return res.status(400).json({ error: "text required" });
 
   const requested = provider || "auto";
 
   // ElevenLabs (premium) — preferred when explicitly requested or auto with key
   if ((requested === "elevenlabs" || requested === "auto") && process.env.ELEVENLABS_API_KEY) {
-    return ttsElevenLabs(text, personaId, res);
+    return ttsElevenLabs(text, personaId, clientVoiceId, res);
   }
 
   // OpenAI — standard
@@ -344,12 +347,15 @@ async function ttsOpenAI(text: string, personaId: string, speed: number, res: an
   }
 }
 
-async function ttsElevenLabs(text: string, personaId: string, res: any) {
+async function ttsElevenLabs(text: string, personaId: string, clientVoiceId: string | undefined, res: any) {
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) return res.status(503).json({ error: "ElevenLabs not configured" });
 
   try {
-    const voiceId = resolveVoiceId(personaId);
+    // Prefer client-provided voice ID (from user's localStorage config) over server-side lookup
+    const voiceId = (clientVoiceId && typeof clientVoiceId === "string" && clientVoiceId.trim())
+      ? clientVoiceId.trim()
+      : resolveVoiceId(personaId);
     const keyPreview = apiKey.substring(0, 4) + "..." + apiKey.substring(apiKey.length - 4);
     console.log(`[TTS:ElevenLabs] voiceId="${voiceId}" persona="${personaId}" keyPreview="${keyPreview}" keyLength=${apiKey.length}`);
 
