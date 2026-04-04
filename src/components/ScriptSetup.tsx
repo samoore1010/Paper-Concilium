@@ -1,5 +1,6 @@
-import { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
+import { Mic, FileText, Sparkles, FolderOpen, Shuffle, Upload, X } from "lucide-react";
 
 export interface SourceContext {
   fileCount: number;
@@ -253,28 +254,28 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
           <ModeButton
             selected={mode === "none"}
             onClick={() => setMode("none")}
-            icon="🎤"
+            icon={<Mic size={22} />}
             title="No Script"
             description="Speak freely without a teleprompter"
           />
           <ModeButton
             selected={mode === "upload"}
             onClick={() => setMode("upload")}
-            icon="📄"
+            icon={<FileText size={22} />}
             title="My Script"
             description="Paste or type your own script"
           />
           <ModeButton
             selected={mode === "generate"}
             onClick={() => setMode("generate")}
-            icon="✨"
+            icon={<Sparkles size={22} />}
             title="Generate Script"
             description="AI writes a script from your description"
           />
           <ModeButton
             selected={mode === "materials"}
             onClick={() => setMode("materials")}
-            icon="📚"
+            icon={<FolderOpen size={22} />}
             title="From My Materials"
             description="Upload docs, slides, or notes"
           />
@@ -303,7 +304,7 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
                   onClick={handleSuggestTopic}
                   className="text-caption px-2.5 py-1 rounded-lg bg-purple-500/15 text-purple-300 hover:bg-purple-500/25 transition-colors flex items-center gap-1"
                 >
-                  <span>🎲</span> Suggest a {getSessionLabel(sessionType)} topic
+                  <Shuffle size={12} /> Suggest a {getSessionLabel(sessionType)} topic
                 </button>
               </div>
               <textarea
@@ -367,7 +368,7 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
                     : "border-white/10 hover:border-white/20 bg-surface-raised"
                 }`}
               >
-                <div className="text-3xl mb-3">📁</div>
+                <div className="flex justify-center mb-3 text-white/40"><Upload size={28} /></div>
                 <div className="text-sm font-medium mb-1">Drop files here or click to browse</div>
                 <div className="text-caption text-white/40">
                   PDF, DOCX, PPTX, TXT, Markdown — up to {MAX_FILES} files, 10MB each
@@ -409,8 +410,8 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
                   <label className="text-xs text-white/50">Uploaded Files</label>
                   {extractedFiles.map((f, i) => (
                     <div key={i} className="flex items-center gap-3 bg-surface-raised border border-white/5 rounded-lg px-3 py-2">
-                      <span className="text-lg">
-                        {f.type === "pdf" ? "📕" : f.type === "docx" ? "📘" : f.type === "pptx" ? "📙" : "📄"}
+                      <span className={`flex-shrink-0 ${f.type === "pdf" ? "text-red-400" : f.type === "docx" ? "text-blue-400" : f.type === "pptx" ? "text-orange-400" : "text-white/50"}`}>
+                        <FileText size={18} />
                       </span>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm truncate">{f.filename}</div>
@@ -421,9 +422,9 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
                       </div>
                       <button
                         onClick={() => handleRemoveFile(i)}
-                        className="text-white/30 hover:text-red-400 text-sm px-1"
+                        className="text-white/30 hover:text-red-400 flex items-center"
                       >
-                        ✕
+                        <X size={14} />
                       </button>
                     </div>
                   ))}
@@ -559,7 +560,7 @@ export function ScriptSetup({ sessionType, onContinue, onBack }: ScriptSetupProp
 }
 
 function ModeButton({ selected, onClick, icon, title, description }: {
-  selected: boolean; onClick: () => void; icon: string; title: string; description: string;
+  selected: boolean; onClick: () => void; icon: React.ReactNode; title: string; description: string;
 }) {
   return (
     <button
@@ -568,7 +569,7 @@ function ModeButton({ selected, onClick, icon, title, description }: {
         selected ? "border-blue-400 bg-blue-500/10" : "border-white/5 bg-surface-raised hover:bg-surface-overlay"
       }`}
     >
-      <div className="text-2xl mb-2">{icon}</div>
+      <div className="mb-2 text-white/70">{icon}</div>
       <div className="text-sm font-medium mb-0.5">{title}</div>
       <div className="text-caption text-white/40">{description}</div>
     </button>
