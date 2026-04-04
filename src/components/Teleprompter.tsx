@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { FileText, Play, Pause, Rewind, RotateCcw, ChevronUp, ChevronDown, X } from "lucide-react";
 
 interface TeleprompterProps {
   script: string;
@@ -98,7 +99,7 @@ export function Teleprompter({ script, isActive, isLive, onToggle }: Teleprompte
         onClick={onToggle}
         className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-30 w-8 h-8 md:w-auto md:h-auto md:px-3 md:py-1.5 rounded-lg bg-black/70 backdrop-blur border border-white/5 text-caption text-white/60 hover:text-white/90 flex items-center justify-center md:gap-1"
       >
-        <span>📄</span>
+        <FileText size={14} />
         <span className="hidden md:inline">Script</span>
       </button>
     );
@@ -122,7 +123,7 @@ export function Teleprompter({ script, isActive, isLive, onToggle }: Teleprompte
             className="w-6 h-6 rounded bg-surface-overlay hover:bg-surface-overlay text-caption text-white/70 flex items-center justify-center"
             title={isScrolling ? "Pause" : "Play"}
           >
-            {isScrolling ? "⏸" : "▶"}
+            {isScrolling ? <Pause size={10} /> : <Play size={10} />}
           </button>
 
           {/* Rewind */}
@@ -131,7 +132,7 @@ export function Teleprompter({ script, isActive, isLive, onToggle }: Teleprompte
             className="w-6 h-6 rounded bg-surface-overlay hover:bg-surface-overlay text-caption text-white/70 flex items-center justify-center"
             title="Rewind"
           >
-            ⏪
+            <Rewind size={10} />
           </button>
 
           {/* Reset */}
@@ -140,7 +141,7 @@ export function Teleprompter({ script, isActive, isLive, onToggle }: Teleprompte
             className="w-6 h-6 rounded bg-surface-overlay hover:bg-surface-overlay text-caption text-white/70 flex items-center justify-center"
             title="Reset to start"
           >
-            ↺
+            <RotateCcw size={10} />
           </button>
 
           {/* Speed */}
@@ -163,7 +164,7 @@ export function Teleprompter({ script, isActive, isLive, onToggle }: Teleprompte
             onClick={() => setExpanded(!expanded)}
             className="md:hidden text-caption text-white/40 hover:text-white/70 ml-1"
           >
-            {expanded ? "▼" : "▲"}
+            {expanded ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
           </button>
         </div>
 
@@ -175,7 +176,7 @@ export function Teleprompter({ script, isActive, isLive, onToggle }: Teleprompte
           {/* Font size */}
           <button onClick={() => setFontSize((s) => Math.max(11, s - 1))} className="w-6 h-6 md:w-5 md:h-5 rounded bg-surface-overlay text-caption text-white/50 flex items-center justify-center">A-</button>
           <button onClick={() => setFontSize((s) => Math.min(22, s + 1))} className="w-6 h-6 md:w-5 md:h-5 rounded bg-surface-overlay text-caption text-white/50 flex items-center justify-center">A+</button>
-          <button onClick={onToggle} className="w-6 h-6 md:w-5 md:h-5 rounded bg-surface-overlay text-caption text-white/50 flex items-center justify-center">✕</button>
+          <button onClick={onToggle} className="w-6 h-6 md:w-5 md:h-5 rounded bg-surface-overlay text-caption text-white/50 flex items-center justify-center"><X size={12} /></button>
         </div>
       </div>
 
