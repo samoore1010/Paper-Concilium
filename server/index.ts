@@ -84,7 +84,19 @@ function resolveVoiceId(personaId: string): string {
 
 // Load custom config at startup
 customVoiceConfig = loadVoiceConfig();
-console.log(`[VoiceConfig] Loaded ${Object.keys(customVoiceConfig).length} custom voice mapping(s)`);
+// Merge Railway env var override — set VOICE_CONFIG={"persona-id":"elevenlabs-voice-id",...} for permanent persistence
+if (process.env.VOICE_CONFIG) {
+  try {
+    const envConfig = JSON.parse(process.env.VOICE_CONFIG);
+    if (envConfig && typeof envConfig === "object") {
+      customVoiceConfig = { ...customVoiceConfig, ...envConfig };
+      console.log(`[VoiceConfig] Applied ${Object.keys(envConfig).length} env var override(s) from VOICE_CONFIG`);
+    }
+  } catch {
+    console.error("[VoiceConfig] VOICE_CONFIG env var is not valid JSON — ignoring");
+  }
+}
+console.log(`[VoiceConfig] Active: ${Object.keys(customVoiceConfig).length} custom mapping(s)`);
 
 // === Character Config Persistence ===
 
@@ -112,7 +124,19 @@ function saveCharacterConfig(names: Record<string, string>): void {
 
 // Load custom character config at startup
 customCharacterNames = loadCharacterConfig();
-console.log(`[CharacterConfig] Loaded ${Object.keys(customCharacterNames).length} custom name(s)`);
+// Merge Railway env var override — set CHARACTER_NAMES={"persona-id":"Custom Name",...} for permanent persistence
+if (process.env.CHARACTER_NAMES) {
+  try {
+    const envNames = JSON.parse(process.env.CHARACTER_NAMES);
+    if (envNames && typeof envNames === "object") {
+      customCharacterNames = { ...customCharacterNames, ...envNames };
+      console.log(`[CharacterConfig] Applied ${Object.keys(envNames).length} env var override(s) from CHARACTER_NAMES`);
+    }
+  } catch {
+    console.error("[CharacterConfig] CHARACTER_NAMES env var is not valid JSON — ignoring");
+  }
+}
+console.log(`[CharacterConfig] Active: ${Object.keys(customCharacterNames).length} custom name(s)`);
 
 // === Health Check ===
 

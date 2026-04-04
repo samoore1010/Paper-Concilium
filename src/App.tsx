@@ -259,6 +259,7 @@ export default function App() {
                 onStartSession={handleStartSession}
                 onViewSession={handleViewSession}
                 collection={characterCollection}
+                customCharacterNames={customCharacterNames}
               />
             </motion.div>
           )}
@@ -267,6 +268,7 @@ export default function App() {
             <motion.div key="collection" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
               <CollectionDashboard
                 collection={characterCollection}
+                customCharacterNames={customCharacterNames}
               />
             </motion.div>
           )}

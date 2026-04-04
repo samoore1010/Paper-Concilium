@@ -16,9 +16,11 @@ import { MiiAvatar } from "./MiiAvatar";
 
 interface CollectionDashboardProps {
   collection: CollectionProgress;
+  customCharacterNames?: Record<string, string>;
 }
 
-export function CollectionDashboard({ collection }: CollectionDashboardProps) {
+export function CollectionDashboard({ collection, customCharacterNames = {} }: CollectionDashboardProps) {
+  const getName = (persona: Persona) => customCharacterNames[persona.id] || persona.name;
   const [activePack, setActivePack] = useState<PersonaPack | "all">("all");
   const [selectedPersona, setSelectedPersona] = useState<Persona | null>(null);
 
@@ -121,7 +123,7 @@ export function CollectionDashboard({ collection }: CollectionDashboardProps) {
                     </div>
                     {isUnlocked ? (
                       <>
-                        <span className="font-medium text-sm">{persona.name}</span>
+                        <span className="font-medium text-sm">{getName(persona)}</span>
                         <span className="text-caption text-white/30 italic">{persona.archetype}</span>
                         {stats && stats.masteryTier !== "none" && (
                           <MasteryBadge tier={stats.masteryTier} />
@@ -151,6 +153,7 @@ export function CollectionDashboard({ collection }: CollectionDashboardProps) {
           persona={selectedPersona}
           collection={collection}
           onClose={() => setSelectedPersona(null)}
+          displayName={getName(selectedPersona)}
         />
       )}
     </div>
@@ -202,10 +205,12 @@ function CharacterDetailModal({
   persona,
   collection,
   onClose,
+  displayName,
 }: {
   persona: Persona;
   collection: CollectionProgress;
   onClose: () => void;
+  displayName?: string;
 }) {
   const stats = getCharacterStats(collection, persona.id);
   const dossier = getDossier(persona, stats);
@@ -221,7 +226,7 @@ function CharacterDetailModal({
         <div className="flex items-start gap-4 mb-6">
           <MiiAvatar persona={persona} size={80} />
           <div className="flex-1">
-            <h3 className="font-semibold text-lg">{persona.name}</h3>
+            <h3 className="font-semibold text-lg">{displayName ?? persona.name}</h3>
             <p className="text-xs text-white/40 italic mb-2">{persona.archetype}</p>
             {stats && stats.masteryTier !== "none" && <MasteryBadge tier={stats.masteryTier} />}
           </div>
