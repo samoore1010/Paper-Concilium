@@ -10,7 +10,6 @@ lerna-debug.log*
 node_modules
 dist
 dist-server
-data/voice-config.json
 dist-ssr
 *.local
 

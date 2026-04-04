@@ -44,8 +44,17 @@ export default function App() {
   const applyCustomNames = (personas: Persona[]): Persona[] =>
     personas.map((p) => customCharacterNames[p.id] ? { ...p, name: customCharacterNames[p.id] } : p);
 
+  const refreshCharacterNames = () => {
+    fetch("/api/admin/character-config")
+      .then((r) => r.json())
+      .then((data: { names: Record<string, string> }) => setCustomCharacterNames(data.names || {}))
+      .catch(() => {});
+  };
+
   // === NAVIGATION ===
   const handleNavigate = (target: AppView) => {
+    // Refresh character names when leaving settings so next session uses updated names
+    if (view === "settings") refreshCharacterNames();
     setView(target);
   };
 
