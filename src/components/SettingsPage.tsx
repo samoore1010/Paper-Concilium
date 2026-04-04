@@ -14,6 +14,7 @@ import {
   Volume2,
   Save,
   Check,
+  Tag,
 } from "lucide-react";
 import {
   AppSettings,
@@ -299,6 +300,9 @@ export function SettingsPage() {
       {/* Admin Voice Config */}
       <VoiceConfigPanel showToast={showToast} />
 
+      {/* Character Names */}
+      <CharacterNamesPanel showToast={showToast} />
+
       {/* About */}
       <SettingsPanel
         icon={<Info className="w-4 h-4" />}
@@ -526,6 +530,129 @@ const PACK_LABELS: Record<string, string> = {
   "legal-bench": "The Bench",
   "business-tank": "The Tank",
 };
+
+function CharacterNamesPanel({ showToast }: { showToast: (msg: string) => void }) {
+  const [customNames, setCustomNames] = useState<Record<string, string>>({});
+  const [edits, setEdits] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/admin/character-config")
+      .then((r) => r.json())
+      .then((data: { names: Record<string, string> }) => {
+        setCustomNames(data.names || {});
+        setEdits(data.names || {});
+      })
+      .catch(() => showToast("Failed to load character names"))
+      .finally(() => setLoading(false));
+  }, [showToast]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/character-config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ names: edits }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      setCustomNames({ ...edits });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      showToast("Character names saved");
+    } catch {
+      showToast("Failed to save character names");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateName = (personaId: string, name: string) => {
+    setEdits((prev) => {
+      const next = { ...prev };
+      if (name.trim()) {
+        next[personaId] = name;
+      } else {
+        delete next[personaId];
+      }
+      return next;
+    });
+  };
+
+  const hasChanges = JSON.stringify(edits) !== JSON.stringify(customNames);
+
+  const grouped = PERSONA_PACKS.map((pack) => ({
+    pack,
+    personas: PERSONA_LIBRARY.filter((p) => p.pack === pack.id),
+  }));
+
+  return (
+    <SettingsPanel
+      icon={<Tag className="w-4 h-4" />}
+      title="Character Names"
+      description="Customize display names for each character"
+    >
+      {loading ? (
+        <p className="text-label text-white/40">Loading...</p>
+      ) : (
+        <div className="space-y-5">
+          {grouped.map(({ pack, personas }) => (
+            <div key={pack.id}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm">{pack.icon}</span>
+                <h3 className="text-label font-medium text-white/60 uppercase tracking-wider">
+                  {PACK_LABELS[pack.id] || pack.name}
+                </h3>
+              </div>
+              <div className="space-y-1.5">
+                {personas.map((persona) => (
+                  <div key={persona.id} className="flex items-center gap-3 py-1.5">
+                    <div className="flex-shrink-0 w-8 h-8">
+                      <MiiAvatar persona={persona} size={32} />
+                    </div>
+                    <div className="flex-shrink-0 w-36 min-w-0">
+                      <p className="text-body text-white/50 truncate leading-tight text-xs">
+                        {persona.name}
+                      </p>
+                    </div>
+                    <input
+                      type="text"
+                      value={edits[persona.id] || ""}
+                      onChange={(e) => updateName(persona.id, e.target.value)}
+                      placeholder={persona.name}
+                      className="flex-1 min-w-0 bg-surface-overlay border border-white/5 rounded-lg px-2.5 py-1.5 text-label text-white/70 placeholder:text-white/25 focus:outline-none focus:border-violet-500/50"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div className="flex justify-end pt-2">
+            <button
+              onClick={handleSave}
+              disabled={!hasChanges || saving}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-label font-medium transition-colors ${
+                saved
+                  ? "bg-green-500/20 text-green-400"
+                  : hasChanges
+                    ? "bg-violet-500/20 text-violet-400 hover:bg-violet-500/30"
+                    : "bg-white/5 text-white/30 cursor-not-allowed"
+              }`}
+            >
+              {saved ? (
+                <><Check className="w-3.5 h-3.5" />Saved</>
+              ) : (
+                <><Save className="w-3.5 h-3.5" />{saving ? "Saving..." : "Save Names"}</>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+    </SettingsPanel>
+  );
+}
 
 function VoiceConfigPanel({ showToast }: { showToast: (msg: string) => void }) {
   const [config, setConfig] = useState<VoiceConfigData | null>(null);

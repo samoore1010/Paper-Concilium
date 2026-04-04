@@ -855,12 +855,13 @@ Your blind spots to be aware of (you may naturally under-weight these): ${charac
 Be honest, specific, and stay fully in character. Reference actual quotes or points from their presentation.`;
 }
 
-export function composePersonaPrompt(personaId: string, sessionType: string): ComposedPersonaPrompt | null {
+export function composePersonaPrompt(personaId: string, sessionType: string, nameOverride?: string): ComposedPersonaPrompt | null {
   const character = CHARACTER_DEFINITIONS[personaId];
   if (!character) return null;
+  const c = nameOverride ? { ...character, name: nameOverride } : character;
   return {
-    systemPrompt: composeSystemPrompt(character, sessionType),
-    reactionInstruction: composeReactionInstruction(character),
-    feedbackInstruction: composeFeedbackInstruction(character),
+    systemPrompt: composeSystemPrompt(c, sessionType),
+    reactionInstruction: composeReactionInstruction(c),
+    feedbackInstruction: composeFeedbackInstruction(c),
   };
 }
