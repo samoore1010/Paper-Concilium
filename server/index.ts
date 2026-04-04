@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
@@ -52,6 +53,38 @@ const ELEVENLABS_VOICES: Record<string, string> = {
   "patricia-omalley": "MF3mGyEYCl7XYWbV9V6O", // Elli
   "dev-patel": "TxGEqnHWrfWFTfGW9XjX",       // Josh
 };
+
+// === Voice Config Persistence ===
+
+const VOICE_CONFIG_PATH = path.join(__dirname, "../data/voice-config.json");
+let customVoiceConfig: Record<string, string> = {};
+
+function loadVoiceConfig(): Record<string, string> {
+  try {
+    if (fs.existsSync(VOICE_CONFIG_PATH)) {
+      const raw = fs.readFileSync(VOICE_CONFIG_PATH, "utf-8");
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") return parsed;
+    }
+  } catch (err: any) {
+    console.error("[VoiceConfig] Failed to load:", err.message);
+  }
+  return {};
+}
+
+function saveVoiceConfig(config: Record<string, string>): void {
+  const dir = path.dirname(VOICE_CONFIG_PATH);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(VOICE_CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
+}
+
+function resolveVoiceId(personaId: string): string {
+  return customVoiceConfig[personaId] || ELEVENLABS_VOICES[personaId] || "21m00Tcm4TlvDq8ikWAM";
+}
+
+// Load custom config at startup
+customVoiceConfig = loadVoiceConfig();
+console.log(`[VoiceConfig] Loaded ${Object.keys(customVoiceConfig).length} custom voice mapping(s)`);
 
 // === Health Check ===
 
@@ -157,7 +190,7 @@ app.post("/api/tts/stream", async (req, res) => {
   // Use ElevenLabs streaming endpoint
   if (apiKey && (provider === "elevenlabs" || provider === "auto")) {
     try {
-      const voiceId = ELEVENLABS_VOICES[personaId] || "21m00Tcm4TlvDq8ikWAM";
+      const voiceId = resolveVoiceId(personaId);
       console.log(`[TTS:Stream] ElevenLabs voice="${voiceId}" persona="${personaId}"`);
 
       const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`, {
@@ -264,7 +297,7 @@ async function ttsElevenLabs(text: string, personaId: string, res: any) {
   if (!apiKey) return res.status(503).json({ error: "ElevenLabs not configured" });
 
   try {
-    const voiceId = ELEVENLABS_VOICES[personaId] || "21m00Tcm4TlvDq8ikWAM";
+    const voiceId = resolveVoiceId(personaId);
     const keyPreview = apiKey.substring(0, 4) + "..." + apiKey.substring(apiKey.length - 4);
     console.log(`[TTS:ElevenLabs] voiceId="${voiceId}" persona="${personaId}" keyPreview="${keyPreview}" keyLength=${apiKey.length}`);
 
@@ -660,6 +693,40 @@ app.post("/api/extract-materials", upload.array("files", 5), async (req, res) =>
     const msg = error instanceof Error ? error.message : String(error);
     console.error("[Materials] Error:", msg);
     res.status(500).json({ error: "Failed to extract materials", detail: msg });
+  }
+});
+
+// === Admin Voice Config ===
+
+app.get("/api/admin/voice-config", (_req, res) => {
+  res.json({
+    defaults: ELEVENLABS_VOICES,
+    custom: customVoiceConfig,
+  });
+});
+
+app.put("/api/admin/voice-config", (req, res) => {
+  const { config } = req.body;
+  if (!config || typeof config !== "object") {
+    return res.status(400).json({ error: "config object required" });
+  }
+
+  // Validate: only allow non-empty string values, strip empty strings
+  const cleaned: Record<string, string> = {};
+  for (const [key, value] of Object.entries(config)) {
+    if (typeof value === "string" && value.trim()) {
+      cleaned[key] = value.trim();
+    }
+  }
+
+  try {
+    saveVoiceConfig(cleaned);
+    customVoiceConfig = cleaned;
+    console.log(`[VoiceConfig] Saved ${Object.keys(cleaned).length} custom voice mapping(s)`);
+    res.json({ saved: true, count: Object.keys(cleaned).length });
+  } catch (err: any) {
+    console.error("[VoiceConfig] Save error:", err.message);
+    res.status(500).json({ error: "Failed to save voice config", detail: err.message });
   }
 });
 

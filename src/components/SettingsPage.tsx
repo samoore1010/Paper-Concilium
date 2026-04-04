@@ -11,6 +11,9 @@ import {
   Trash2,
   Download,
   ChevronDown,
+  Volume2,
+  Save,
+  Check,
 } from "lucide-react";
 import {
   AppSettings,
@@ -19,6 +22,8 @@ import {
   resetSettings,
 } from "../data/appSettings";
 import { getSessionHistory, clearHistory } from "../data/sessionHistory";
+import { PERSONA_LIBRARY, PERSONA_PACKS, Persona } from "../data/personas";
+import { MiiAvatar } from "./MiiAvatar";
 
 // ============================================================
 // Settings Page
@@ -291,6 +296,9 @@ export function SettingsPage() {
         </div>
       </SettingsPanel>
 
+      {/* Admin Voice Config */}
+      <VoiceConfigPanel showToast={showToast} />
+
       {/* About */}
       <SettingsPanel
         icon={<Info className="w-4 h-4" />}
@@ -500,6 +508,197 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between">
       <span className="text-white/50">{label}</span>
       <span className="text-white/70">{value}</span>
+    </div>
+  );
+}
+
+// ============================================================
+// Admin Voice Configuration Panel
+// ============================================================
+
+interface VoiceConfigData {
+  defaults: Record<string, string>;
+  custom: Record<string, string>;
+}
+
+const PACK_LABELS: Record<string, string> = {
+  general: "General Audience",
+  "legal-bench": "The Bench",
+  "business-tank": "The Tank",
+};
+
+function VoiceConfigPanel({ showToast }: { showToast: (msg: string) => void }) {
+  const [config, setConfig] = useState<VoiceConfigData | null>(null);
+  const [edits, setEdits] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/admin/voice-config")
+      .then((r) => r.json())
+      .then((data: VoiceConfigData) => {
+        setConfig(data);
+        setEdits(data.custom);
+      })
+      .catch(() => showToast("Failed to load voice config"))
+      .finally(() => setLoading(false));
+  }, [showToast]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/voice-config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ config: edits }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      setConfig((prev) => prev ? { ...prev, custom: { ...edits } } : prev);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      showToast("Voice configuration saved");
+    } catch {
+      showToast("Failed to save voice config");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateVoiceId = (personaId: string, voiceId: string) => {
+    setEdits((prev) => {
+      const next = { ...prev };
+      if (voiceId.trim()) {
+        next[personaId] = voiceId;
+      } else {
+        delete next[personaId];
+      }
+      return next;
+    });
+  };
+
+  const hasChanges =
+    config && JSON.stringify(edits) !== JSON.stringify(config.custom);
+
+  // Group personas by pack
+  const grouped = PERSONA_PACKS.map((pack) => ({
+    pack,
+    personas: PERSONA_LIBRARY.filter((p) => p.pack === pack.id),
+  }));
+
+  return (
+    <SettingsPanel
+      icon={<Volume2 className="w-4 h-4" />}
+      title="Voice Configuration"
+      description="Map ElevenLabs voice IDs to characters"
+    >
+      {loading ? (
+        <p className="text-label text-white/40">Loading voice config...</p>
+      ) : (
+        <div className="space-y-5">
+          {grouped.map(({ pack, personas }) => (
+            <div key={pack.id}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm">{pack.icon}</span>
+                <h3 className="text-label font-medium text-white/60 uppercase tracking-wider">
+                  {PACK_LABELS[pack.id] || pack.name}
+                </h3>
+                <span className="text-label text-white/30">
+                  {personas.length}
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {personas.map((persona) => (
+                  <VoiceConfigRow
+                    key={persona.id}
+                    persona={persona}
+                    defaultVoiceId={config?.defaults[persona.id]}
+                    customVoiceId={edits[persona.id] || ""}
+                    onChange={(v) => updateVoiceId(persona.id, v)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {/* Save button */}
+          <div className="flex justify-end pt-2">
+            <button
+              onClick={handleSave}
+              disabled={!hasChanges || saving}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-label font-medium transition-colors ${
+                saved
+                  ? "bg-green-500/20 text-green-400"
+                  : hasChanges
+                    ? "bg-violet-500/20 text-violet-400 hover:bg-violet-500/30"
+                    : "bg-white/5 text-white/30 cursor-not-allowed"
+              }`}
+            >
+              {saved ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  Saved
+                </>
+              ) : (
+                <>
+                  <Save className="w-3.5 h-3.5" />
+                  {saving ? "Saving..." : "Save Voice Config"}
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+    </SettingsPanel>
+  );
+}
+
+function VoiceConfigRow({
+  persona,
+  defaultVoiceId,
+  customVoiceId,
+  onChange,
+}: {
+  persona: Persona;
+  defaultVoiceId?: string;
+  customVoiceId: string;
+  onChange: (v: string) => void;
+}) {
+  const hasCustom = !!customVoiceId.trim();
+
+  return (
+    <div className="flex items-center gap-3 py-1.5">
+      {/* Avatar */}
+      <div className="flex-shrink-0 w-8 h-8">
+        <MiiAvatar persona={persona} size={32} />
+      </div>
+
+      {/* Name + archetype */}
+      <div className="flex-shrink-0 w-36 min-w-0">
+        <p className="text-body text-white/80 truncate leading-tight">
+          {persona.name}
+        </p>
+        <p className="text-[10px] text-white/35 truncate leading-tight">
+          {persona.archetype}
+        </p>
+      </div>
+
+      {/* Status dot */}
+      <div
+        className={`flex-shrink-0 w-2 h-2 rounded-full ${
+          hasCustom ? "bg-green-400" : "bg-white/20"
+        }`}
+        title={hasCustom ? "Custom voice configured" : "Using default fallback"}
+      />
+
+      {/* Voice ID input */}
+      <input
+        type="text"
+        value={customVoiceId}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={defaultVoiceId || "Rachel (default)"}
+        className="flex-1 min-w-0 bg-surface-overlay border border-white/5 rounded-lg px-2.5 py-1.5 text-label text-white/70 placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 font-mono"
+      />
     </div>
   );
 }
