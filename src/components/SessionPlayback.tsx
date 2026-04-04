@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { Play, Pause } from "lucide-react";
 import { ProsodyFrame } from "../hooks/useProsody";
 import { generateCoachingReport, CoachingReport } from "../data/prosodyAnalysis";
 
@@ -29,6 +30,11 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const formatTime = (s: number) => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
+
+  // Reserve space at bottom of canvas for time axis labels
+  const TIME_AXIS_HEIGHT = 18;
+
   // Draw the waveform/prosody graph
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -44,12 +50,13 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
     ctx.scale(dpr, dpr);
 
     const w = rect.width;
-    const h = rect.height;
+    const totalH = rect.height;
+    const h = totalH - TIME_AXIS_HEIGHT; // drawable area above time axis
 
     // Clear
-    ctx.clearRect(0, 0, w, h);
+    ctx.clearRect(0, 0, w, totalH);
 
-    // Background grid
+    // Background horizontal grid
     ctx.strokeStyle = "rgba(255,255,255,0.05)";
     ctx.lineWidth = 1;
     for (let i = 0; i <= 4; i++) {
@@ -60,8 +67,25 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
       ctx.stroke();
     }
 
-    // Draw the selected metric as a filled area
     const maxTime = timeline[timeline.length - 1]?.time || duration || 1;
+
+    // Time axis labels and vertical gridlines
+    const timeInterval = maxTime <= 60 ? 15 : maxTime <= 180 ? 30 : 60;
+    ctx.font = "10px ui-monospace, monospace";
+    ctx.textAlign = "center";
+    for (let t = timeInterval; t < maxTime; t += timeInterval) {
+      const x = (t / maxTime) * w;
+      // Vertical gridline
+      ctx.strokeStyle = "rgba(255,255,255,0.06)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, h);
+      ctx.stroke();
+      // Time label
+      ctx.fillStyle = "rgba(255,255,255,0.3)";
+      ctx.fillText(formatTime(t), x, totalH - 4);
+    }
 
     // Volume bars (background)
     ctx.fillStyle = "rgba(99, 102, 241, 0.1)";
@@ -100,15 +124,62 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
       ctx.fill();
     }
 
-    // Draw event markers
+    // Draw event markers with staggering and drop lines
+    const markerColors = { info: "#6366f1", warning: "#f59e0b", good: "#10b981" };
+    const markerPositions: { x: number; y: number }[] = [];
     events.forEach((evt) => {
       const x = (evt.time / maxTime) * w;
-      const markerColors = { info: "#6366f1", warning: "#f59e0b", good: "#10b981" };
+      let markerY = 14;
+      // Stagger vertically when markers overlap within 12px
+      for (const prev of markerPositions) {
+        if (Math.abs(prev.x - x) < 12 && Math.abs(prev.y - markerY) < 12) {
+          markerY += 14;
+        }
+      }
+      markerPositions.push({ x, y: markerY });
+
+      // Drop line from marker to waveform bottom
+      ctx.strokeStyle = markerColors[evt.severity] + "40";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(x, markerY + 6);
+      ctx.lineTo(x, h);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Marker circle with white border ring
       ctx.fillStyle = markerColors[evt.severity];
       ctx.beginPath();
-      ctx.arc(x, 8, 4, 0, Math.PI * 2);
+      ctx.arc(x, markerY, 6, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.6)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
     });
+
+    // Metric legend badge (top-left)
+    const metricLabels = { volume: "Volume", pitch: "Pitch", energy: "Energy" };
+    const labelText = metricLabels[activeMetric];
+    ctx.font = "600 10px system-ui, sans-serif";
+    const textW = ctx.measureText(labelText).width;
+    const badgeW = textW + 20;
+    const badgeH = 18;
+    const badgeX = 8;
+    const badgeY = h - badgeH - 6;
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.beginPath();
+    ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 4);
+    ctx.fill();
+    // Color dot
+    ctx.fillStyle = colors[activeMetric];
+    ctx.beginPath();
+    ctx.arc(badgeX + 8, badgeY + badgeH / 2, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    // Label text
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    ctx.textAlign = "left";
+    ctx.fillText(labelText, badgeX + 15, badgeY + badgeH / 2 + 3.5);
 
     // Draw playback position
     if (currentTime > 0) {
@@ -167,8 +238,6 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
     setCurrentTime(audio.currentTime);
   }, [timeline, duration]);
 
-  const formatTime = (s: number) => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
-
   // Find events near current playback time
   const activeEvents = events.filter((e) => Math.abs(e.time - currentTime) < 2);
 
@@ -210,17 +279,16 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
         ))}
       </div>
 
-      {/* Waveform canvas */}
+      {/* Waveform canvas — responsive height */}
       <div ref={containerRef} className="relative rounded-lg bg-surface-raised border border-white/5 overflow-hidden">
         <canvas
           ref={canvasRef}
-          className="w-full cursor-pointer"
-          style={{ height: 120 }}
+          className="w-full cursor-pointer h-[138px] sm:h-[198px] md:h-[218px]"
           onClick={seekTo}
         />
-        {/* Time labels */}
-        <div className="absolute bottom-1 left-2 text-caption text-white/30">{formatTime(currentTime)}</div>
-        <div className="absolute bottom-1 right-2 text-caption text-white/30">{formatTime(duration)}</div>
+        {/* Current time / duration overlays */}
+        <div className="absolute bottom-5 left-2 text-caption text-white/30 font-mono">{formatTime(currentTime)}</div>
+        <div className="absolute bottom-5 right-2 text-caption text-white/30 font-mono">{formatTime(duration)}</div>
       </div>
 
       {/* Controls */}
@@ -229,7 +297,7 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
           onClick={togglePlay}
           className="w-10 h-10 rounded-full bg-surface-overlay hover:bg-white/20 flex items-center justify-center text-white transition-colors"
         >
-          {isPlaying ? "⏸" : "▶"}
+          {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
         </button>
         <div className="flex items-center gap-1.5">
           <span className="text-caption text-white/40">Speed:</span>
@@ -240,7 +308,7 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
                 setPlaybackSpeed(s);
                 if (audioRef.current) audioRef.current.playbackRate = s;
               }}
-              className={`text-caption px-1.5 py-0.5 rounded ${playbackSpeed === s ? "bg-blue-500/20 text-blue-300" : "bg-white/5 text-white/40"}`}
+              className={`text-caption px-2 py-1 rounded transition-colors ${playbackSpeed === s ? "bg-blue-500/20 text-blue-300" : "bg-white/5 text-white/40 hover:bg-white/10"}`}
             >
               {s}x
             </button>
@@ -317,7 +385,6 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
             />
             <CoachingCard title="Filler Words" rating={coachingReport.fillers.rating} advice={coachingReport.fillers.advice}
               stats={[{ label: "Count", value: `${coachingReport.fillers.count}` }, { label: "Per Minute", value: `${coachingReport.fillers.perMinute}` }]}
-              className="md:col-span-2"
             />
           </div>
         </div>
@@ -339,13 +406,13 @@ function CoachingCard({ title, rating, advice, stats, className }: {
 
   return (
     <div className={`rounded-xl border border-white/5 bg-surface-raised p-4 ${className || ""}`}>
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-3">
         <h4 className="text-xs font-semibold text-white/80">{title}</h4>
         <span className={`text-caption font-medium px-2 py-0.5 rounded-full bg-white/5 ${ratingColors[rating] || "text-white/50"}`}>
           {rating.replace(/-/g, " ")}
         </span>
       </div>
-      <div className="flex flex-wrap gap-3 mb-3">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
         {stats.map((s) => (
           <div key={s.label} className="text-caption">
             <span className="text-white/40">{s.label}: </span>
@@ -353,7 +420,9 @@ function CoachingCard({ title, rating, advice, stats, className }: {
           </div>
         ))}
       </div>
-      <p className="text-label text-white/50 leading-relaxed">{advice}</p>
+      <div className="border-t border-white/5 mt-3 pt-3">
+        <p className="text-label text-white/50 leading-relaxed">{advice}</p>
+      </div>
     </div>
   );
 }
