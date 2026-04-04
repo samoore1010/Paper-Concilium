@@ -83,7 +83,7 @@ export function ProgressDashboard({ onBack }: ProgressDashboardProps) {
 
   if (sessions.length === 0) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f] text-white flex flex-col items-center justify-center p-6">
+      <div className="min-h-screen bg-surface-base text-white flex flex-col items-center justify-center p-6">
         <Calendar className="w-16 h-16 text-white/20 mb-4" />
         <h2 className="text-heading font-semibold mb-2">No sessions yet</h2>
         <p className="text-body text-white/50 mb-6 text-center max-w-sm">
@@ -101,6 +101,12 @@ export function ProgressDashboard({ onBack }: ProgressDashboardProps) {
 
   return (
     <div className="px-4 py-section-sm md:py-section space-y-section-sm md:space-y-section">
+        {/* Page Header */}
+        <div>
+          <h1 className="text-heading font-semibold text-white">Progress</h1>
+          <p className="text-body text-white/50 mt-1">Track your improvement over time</p>
+        </div>
+
         {/* Summary Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <SummaryCard
@@ -135,6 +141,9 @@ export function ProgressDashboard({ onBack }: ProgressDashboardProps) {
             accent="text-purple-400"
           />
         </div>
+
+        {/* Performance Trends section */}
+        <div className="text-label font-semibold text-white/30 uppercase tracking-widest px-0.5">Performance Trends</div>
 
         {/* Score Trend */}
         <ChartCard title="Score Trend" icon={<TrendingUp className="w-4 h-4" />}>
@@ -192,6 +201,12 @@ export function ProgressDashboard({ onBack }: ProgressDashboardProps) {
           </div>
         </ChartCard>
 
+        {/* Divider between Performance and Activity */}
+        <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+
+        {/* Activity section */}
+        <div className="text-label font-semibold text-white/30 uppercase tracking-widest px-0.5">Activity</div>
+
         {/* Practice Heatmap */}
         <ChartCard title="Practice Frequency" icon={<Calendar className="w-4 h-4" />}>
           <Heatmap data={heatmap} />
@@ -235,7 +250,7 @@ function SummaryCard({
 }) {
   return (
     <motion.div
-      className="rounded-xl border border-white/5 bg-white/[0.03] p-4"
+      className="rounded-xl border border-white/5 bg-surface-raised p-4"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
     >
@@ -256,7 +271,7 @@ function ChartCard({
 }) {
   return (
     <motion.div
-      className="rounded-xl border border-white/5 bg-white/[0.03] p-4 md:p-5"
+      className="rounded-xl border border-white/5 bg-surface-raised p-4 md:p-5"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
     >
@@ -271,7 +286,7 @@ function ChartCard({
 
 function BestCard({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
-    <div className="rounded-lg border border-yellow-500/10 bg-yellow-500/[0.03] p-3 text-center">
+    <div className="rounded-lg border border-white/5 bg-surface-raised p-3 text-center">
       <div className="text-label text-white/40 mb-1">{label}</div>
       <div className="text-subtitle font-bold text-yellow-400">
         {value}
@@ -344,36 +359,114 @@ function buildHeatmap(sessions: SessionRecord[]): HeatmapDay[] {
   return days;
 }
 
+const DOW_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+// Only show Mon, Wed, Fri to avoid crowding
+const DOW_SHOWN = new Set([1, 3, 5]);
+
 function Heatmap({ data }: { data: HeatmapDay[] }) {
   const maxCount = Math.max(1, ...data.map((d) => d.count));
   const weeks = Math.max(...data.map((d) => d.weekIndex)) + 1;
 
+  // Build month label positions: first week index where a new month starts
+  const monthLabels = useMemo(() => {
+    const seen = new Set<string>();
+    const labels: { weekIndex: number; label: string }[] = [];
+    for (const d of data) {
+      const monthKey = d.date.slice(0, 7); // "YYYY-MM"
+      if (!seen.has(monthKey)) {
+        seen.add(monthKey);
+        const date = new Date(d.date + "T00:00:00");
+        labels.push({
+          weekIndex: d.weekIndex,
+          label: date.toLocaleDateString("en-US", { month: "short" }),
+        });
+      }
+    }
+    return labels;
+  }, [data]);
+
+  const CELL = 14;
+  const GAP = 3;
+  const DAY_LABEL_W = 28;
+
   return (
     <div className="overflow-x-auto">
-      <div className="inline-grid gap-[3px]" style={{ gridTemplateColumns: `repeat(${weeks}, 14px)`, gridTemplateRows: "repeat(7, 14px)" }}>
-        {data.map((d) => {
-          const intensity = d.count === 0 ? 0 : Math.max(0.2, d.count / maxCount);
-          return (
-            <div
-              key={d.date}
-              className="rounded-[3px] transition-colors"
-              style={{
-                gridColumn: d.weekIndex + 1,
-                gridRow: d.dayOfWeek + 1,
-                backgroundColor: d.count === 0 ? "rgba(255,255,255,0.04)" : `rgba(74, 222, 128, ${intensity})`,
-              }}
-              title={`${d.date}: ${d.count} session${d.count !== 1 ? "s" : ""}`}
-            />
-          );
-        })}
+      {/* Month labels row */}
+      <div className="flex mb-1" style={{ paddingLeft: DAY_LABEL_W }}>
+        {monthLabels.map(({ weekIndex, label }) => (
+          <div
+            key={label + weekIndex}
+            className="text-caption text-white/30 whitespace-nowrap"
+            style={{
+              position: "relative",
+              left: weekIndex * (CELL + GAP),
+              minWidth: 0,
+              marginRight: 0,
+            }}
+          >
+            {label}
+          </div>
+        ))}
       </div>
-      <div className="flex items-center gap-1.5 mt-2">
+
+      {/* Grid with day labels */}
+      <div className="flex items-start gap-[3px]">
+        {/* Day-of-week labels */}
+        <div
+          className="flex flex-col gap-[3px] shrink-0"
+          style={{ width: DAY_LABEL_W, paddingTop: 0 }}
+        >
+          {Array.from({ length: 7 }, (_, i) => (
+            <div
+              key={i}
+              className="text-caption text-white/30 leading-none flex items-center"
+              style={{ height: CELL }}
+            >
+              {DOW_SHOWN.has(i) ? DOW_LABELS[i] : ""}
+            </div>
+          ))}
+        </div>
+
+        {/* Heatmap grid */}
+        <div
+          className="inline-grid gap-[3px]"
+          style={{
+            gridTemplateColumns: `repeat(${weeks}, ${CELL}px)`,
+            gridTemplateRows: `repeat(7, ${CELL}px)`,
+          }}
+        >
+          {data.map((d) => {
+            const intensity = d.count === 0 ? 0 : Math.max(0.2, d.count / maxCount);
+            return (
+              <div
+                key={d.date}
+                className="rounded-[3px] transition-colors"
+                style={{
+                  gridColumn: d.weekIndex + 1,
+                  gridRow: d.dayOfWeek + 1,
+                  backgroundColor:
+                    d.count === 0
+                      ? "rgba(255,255,255,0.04)"
+                      : `rgba(74, 222, 128, ${intensity})`,
+                }}
+                title={`${d.date}: ${d.count} session${d.count !== 1 ? "s" : ""}`}
+              />
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-1.5 mt-2" style={{ paddingLeft: DAY_LABEL_W }}>
         <span className="text-caption text-white/30">Less</span>
         {[0, 0.2, 0.4, 0.7, 1].map((o) => (
           <div
             key={o}
             className="w-3 h-3 rounded-[2px]"
-            style={{ backgroundColor: o === 0 ? "rgba(255,255,255,0.04)" : `rgba(74, 222, 128, ${o})` }}
+            style={{
+              backgroundColor:
+                o === 0 ? "rgba(255,255,255,0.04)" : `rgba(74, 222, 128, ${o})`,
+            }}
           />
         ))}
         <span className="text-caption text-white/30">More</span>
