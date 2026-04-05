@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { VoiceConfig, pickBestVoice, getElevenLabsVoiceId } from "../data/voiceConfig";
+import { VoiceConfig, pickBestVoice } from "../data/voiceConfig";
 
 export type TTSProvider = "auto" | "elevenlabs" | "openai" | "browser";
 
@@ -159,7 +159,6 @@ export function useTTS(options?: UseTTSOptions): UseTTSReturn {
         body: JSON.stringify({
           text,
           personaId,
-          voiceId: personaId ? getElevenLabsVoiceId(personaId) : undefined,
           speed: voiceConfig?.speed || 1.0,
           provider: useApi,
         }),

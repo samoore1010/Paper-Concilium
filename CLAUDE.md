@@ -18,8 +18,36 @@ AI-powered presentation practice platform where users rehearse pitches with inte
 | `OPENAI_API_KEY` | OpenAI TTS fallback |
 | `ELEVENLABS_API_KEY` | Premium TTS + real-time STT (single-use token minting) |
 | `PORT` | Server port (default 3000) |
+| `CONFIG_DATA_DIR` | Writable directory for live config (voice/character JSON). Point at a Railway volume mount (e.g. `/data-live`) to persist Settings UI changes across redeploys. Defaults to `./data` (the committed seed) when unset. |
+| `VOICE_CONFIG` | *(optional)* JSON string, emergency env-var override for voice ID mappings. Last layer in the merge chain. |
+| `CHARACTER_NAMES` | *(optional)* JSON string, emergency env-var override for character display names. |
 
 App degrades gracefully if keys are missing.
+
+### Persistent config on Railway
+
+Voice IDs and character names use a two-tier config system (see
+`server/index.ts` — "Config Persistence" section):
+
+1. **Seed** — `data/voice-config.json` and `data/character-config.json` are
+   committed to the repo and ship with every deploy. They define the starting
+   state for any fresh environment.
+2. **Live** — `$CONFIG_DATA_DIR/voice-config.json` and
+   `$CONFIG_DATA_DIR/character-config.json` on a Railway volume. All writes
+   from the Settings UI land here, so changes survive redeploys without
+   needing a git commit or env var edit.
+
+Load order on startup (each layer overrides the previous):
+`hardcoded defaults → seed file → live volume file → VOICE_CONFIG / CHARACTER_NAMES env vars`
+
+**To enable persistent live config on Railway:**
+1. In the Railway service, add a Volume (e.g. mount path `/data-live`, 1 GB is plenty).
+2. Add env var `CONFIG_DATA_DIR=/data-live`.
+3. Redeploy. Changes made in Settings → Voice Configuration / Character Names
+   now write to the volume and persist automatically.
+
+For local dev, leave `CONFIG_DATA_DIR` unset — writes land in `./data/*.json`
+so you can commit them as new seed values when desired.
 
 ## Commands
 

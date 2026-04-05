@@ -26,11 +26,7 @@ import {
 } from "../data/appSettings";
 import { getSessionHistory, clearHistory } from "../data/sessionHistory";
 import { PERSONA_LIBRARY, PERSONA_PACKS, Persona } from "../data/personas";
-import {
-  ELEVENLABS_DEFAULT_VOICES,
-  loadCustomVoiceConfig,
-  saveCustomVoiceConfig,
-} from "../data/voiceConfig";
+import { ELEVENLABS_DEFAULT_VOICES } from "../data/voiceConfig";
 import { MiiAvatar } from "./MiiAvatar";
 
 // ============================================================
@@ -650,17 +646,6 @@ function CharacterNamesPanel({ showToast }: { showToast: (msg: string) => void }
               )}
             </button>
           </div>
-
-          {/* Permanent config hint */}
-          {Object.keys(customNames).length > 0 && (
-            <div className="mt-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-              <p className="text-[10px] text-amber-400/80 font-medium mb-1.5">To make permanent (survives Railway redeploys):</p>
-              <p className="text-[10px] text-white/40 mb-1.5">Set this Railway environment variable:</p>
-              <code className="block text-[10px] text-amber-300/70 bg-black/20 rounded px-2 py-1.5 break-all font-mono select-all">
-                CHARACTER_NAMES={JSON.stringify(customNames)}
-              </code>
-            </div>
-          )}
         </div>
       )}
     </SettingsPanel>
@@ -668,20 +653,46 @@ function CharacterNamesPanel({ showToast }: { showToast: (msg: string) => void }
 }
 
 function VoiceConfigPanel({ showToast }: { showToast: (msg: string) => void }) {
+  const [savedConfig, setSavedConfig] = useState<Record<string, string>>({});
+  const [edits, setEdits] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [savedConfig, setSavedConfig] = useState<Record<string, string>>(() => loadCustomVoiceConfig());
-  const [edits, setEdits] = useState<Record<string, string>>(() => loadCustomVoiceConfig());
+  const [loading, setLoading] = useState(true);
 
-  const handleSave = () => {
+  useEffect(() => {
+    fetch("/api/admin/voice-config")
+      .then((r) => r.json())
+      .then((data: { custom: Record<string, string> }) => {
+        const custom = data.custom || {};
+        setSavedConfig(custom);
+        setEdits(custom);
+      })
+      .catch(() => showToast("Failed to load voice config"))
+      .finally(() => setLoading(false));
+  }, [showToast]);
+
+  const handleSave = async () => {
     const cleaned: Record<string, string> = {};
     for (const [key, value] of Object.entries(edits)) {
       if (value.trim()) cleaned[key] = value.trim();
     }
-    saveCustomVoiceConfig(cleaned);
-    setSavedConfig(cleaned);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-    showToast("Voice configuration saved");
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/voice-config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ config: cleaned }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      setSavedConfig(cleaned);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      showToast("Voice configuration saved");
+    } catch {
+      showToast("Failed to save voice config");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const updateVoiceId = (personaId: string, voiceId: string) => {
@@ -710,60 +721,64 @@ function VoiceConfigPanel({ showToast }: { showToast: (msg: string) => void }) {
       title="Voice Configuration"
       description="Map ElevenLabs voice IDs to characters"
     >
-      <div className="space-y-5">
-        {grouped.map(({ pack, personas }) => (
-          <div key={pack.id}>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-sm">{pack.icon}</span>
-              <h3 className="text-label font-medium text-white/60 uppercase tracking-wider">
-                {PACK_LABELS[pack.id] || pack.name}
-              </h3>
-              <span className="text-label text-white/30">
-                {personas.length}
-              </span>
+      {loading ? (
+        <p className="text-label text-white/40">Loading voice config...</p>
+      ) : (
+        <div className="space-y-5">
+          {grouped.map(({ pack, personas }) => (
+            <div key={pack.id}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm">{pack.icon}</span>
+                <h3 className="text-label font-medium text-white/60 uppercase tracking-wider">
+                  {PACK_LABELS[pack.id] || pack.name}
+                </h3>
+                <span className="text-label text-white/30">
+                  {personas.length}
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {personas.map((persona) => (
+                  <VoiceConfigRow
+                    key={persona.id}
+                    persona={persona}
+                    defaultVoiceId={ELEVENLABS_DEFAULT_VOICES[persona.id]}
+                    customVoiceId={edits[persona.id] || ""}
+                    onChange={(v) => updateVoiceId(persona.id, v)}
+                    showToast={showToast}
+                  />
+                ))}
+              </div>
             </div>
-            <div className="space-y-1.5">
-              {personas.map((persona) => (
-                <VoiceConfigRow
-                  key={persona.id}
-                  persona={persona}
-                  defaultVoiceId={ELEVENLABS_DEFAULT_VOICES[persona.id]}
-                  customVoiceId={edits[persona.id] || ""}
-                  onChange={(v) => updateVoiceId(persona.id, v)}
-                  showToast={showToast}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
+          ))}
 
-        {/* Save button */}
-        <div className="sticky bottom-0 bg-surface-raised flex justify-end pt-2 pb-1">
-          <button
-            onClick={handleSave}
-            disabled={!hasChanges}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-label font-medium transition-colors ${
-              saved
-                ? "bg-green-500/20 text-green-400"
-                : hasChanges
-                  ? "bg-violet-500/20 text-violet-400 hover:bg-violet-500/30"
-                  : "bg-white/5 text-white/30 cursor-not-allowed"
-            }`}
-          >
-            {saved ? (
-              <>
-                <Check className="w-3.5 h-3.5" />
-                Saved
-              </>
-            ) : (
-              <>
-                <Save className="w-3.5 h-3.5" />
-                Save Voice Config
-              </>
-            )}
-          </button>
+          {/* Save button */}
+          <div className="sticky bottom-0 bg-surface-raised flex justify-end pt-2 pb-1">
+            <button
+              onClick={handleSave}
+              disabled={!hasChanges || saving}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-label font-medium transition-colors ${
+                saved
+                  ? "bg-green-500/20 text-green-400"
+                  : hasChanges
+                    ? "bg-violet-500/20 text-violet-400 hover:bg-violet-500/30"
+                    : "bg-white/5 text-white/30 cursor-not-allowed"
+              }`}
+            >
+              {saved ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  Saved
+                </>
+              ) : (
+                <>
+                  <Save className="w-3.5 h-3.5" />
+                  {saving ? "Saving..." : "Save Voice Config"}
+                </>
+              )}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </SettingsPanel>
   );
 }

@@ -37,38 +37,10 @@ export const ELEVENLABS_DEFAULT_VOICES: Record<string, string> = {
   "tank-brand-builder":      "21m00Tcm4TlvDq8ikWAM",
 };
 
-const VOICE_CONFIG_STORAGE_KEY = "concilium_voice_config";
-
-/** Load user's custom ElevenLabs voice ID overrides from localStorage. */
-export function loadCustomVoiceConfig(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(VOICE_CONFIG_STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-/** Persist user's custom ElevenLabs voice ID overrides to localStorage. */
-export function saveCustomVoiceConfig(config: Record<string, string>): void {
-  try {
-    localStorage.setItem(VOICE_CONFIG_STORAGE_KEY, JSON.stringify(config));
-  } catch {
-    // localStorage unavailable — silently degrade
-  }
-}
-
-/**
- * Resolve the ElevenLabs voice ID for a persona.
- * Checks localStorage custom config first, falls back to hardcoded defaults,
- * then falls back to Rachel (the ElevenLabs universal default).
- */
-export function getElevenLabsVoiceId(personaId: string): string {
-  const custom = loadCustomVoiceConfig();
-  return custom[personaId] || ELEVENLABS_DEFAULT_VOICES[personaId] || "21m00Tcm4TlvDq8ikWAM";
-}
+// ElevenLabs voice ID resolution is server-side (server/index.ts resolveVoiceId).
+// ELEVENLABS_DEFAULT_VOICES above is kept only for Settings input placeholders.
+// PERSONA_VOICE_MAP below is unrelated — it tunes the browser Web Speech API
+// fallback (pitch/rate/volume/gender hints) when no API TTS is available.
 
 export const PERSONA_VOICE_MAP: Record<string, VoiceConfig> = {
   "maria-chen": {

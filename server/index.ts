@@ -54,37 +54,79 @@ const ELEVENLABS_VOICES: Record<string, string> = {
   "dev-patel": "TxGEqnHWrfWFTfGW9XjX",       // Josh
 };
 
-// === Voice Config Persistence ===
+// === Config Persistence ===
+//
+// Two-tier config storage:
+//   1. SEED_DIR — committed `data/*.json` in the repo. Ships with every
+//      deploy so fresh environments work out of the box. Read-only at
+//      runtime on Railway.
+//   2. LIVE_DIR — a writable directory backed by a Railway volume (or any
+//      persistent mount). Set via CONFIG_DATA_DIR. Settings UI writes land
+//      here and survive redeploys. Defaults to SEED_DIR when unset.
+//
+// Startup merge order: seed → live file → env var. Per-key overlay, so a
+// live file containing only one persona still inherits the rest from seed.
+// The Settings UI, however, always writes the complete current set to the
+// live file, so in steady state the live file fully shadows seed — seed
+// only matters as a bootstrap before the first save.
+//
+// Env vars VOICE_CONFIG / CHARACTER_NAMES remain available as a last-resort
+// override layered on top of both files.
 
-const VOICE_CONFIG_PATH = path.join(__dirname, "../data/voice-config.json");
+const SEED_DIR = path.resolve(__dirname, "../data");
+const LIVE_DIR = path.resolve(process.env.CONFIG_DATA_DIR || SEED_DIR);
+const LIVE_IS_SEPARATE = LIVE_DIR !== SEED_DIR;
+
+const VOICE_SEED_PATH = path.join(SEED_DIR, "voice-config.json");
+const VOICE_LIVE_PATH = path.join(LIVE_DIR, "voice-config.json");
+const CHARACTER_SEED_PATH = path.join(SEED_DIR, "character-config.json");
+const CHARACTER_LIVE_PATH = path.join(LIVE_DIR, "character-config.json");
+
+function readJsonFile(filePath: string): Record<string, unknown> | null {
+  try {
+    const raw = fs.readFileSync(filePath, "utf-8");
+    const parsed = JSON.parse(raw);
+    // Reject arrays and primitives — config files must be objects
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch (err: any) {
+    if (err.code !== "ENOENT") {
+      console.error(`[Config] Failed to read ${filePath}:`, err.message);
+    }
+  }
+  return null;
+}
+
+function writeJsonFile(filePath: string, data: unknown): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+}
+
+// --- Voice Config ---
+
 let customVoiceConfig: Record<string, string> = {};
 
 function loadVoiceConfig(): Record<string, string> {
-  try {
-    if (fs.existsSync(VOICE_CONFIG_PATH)) {
-      const raw = fs.readFileSync(VOICE_CONFIG_PATH, "utf-8");
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === "object") return parsed;
-    }
-  } catch (err: any) {
-    console.error("[VoiceConfig] Failed to load:", err.message);
+  const merged: Record<string, string> = {};
+  const seed = readJsonFile(VOICE_SEED_PATH);
+  if (seed) Object.assign(merged, seed);
+  if (LIVE_IS_SEPARATE) {
+    const live = readJsonFile(VOICE_LIVE_PATH);
+    if (live) Object.assign(merged, live);
   }
-  return {};
+  return merged;
 }
 
 function saveVoiceConfig(config: Record<string, string>): void {
-  const dir = path.dirname(VOICE_CONFIG_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(VOICE_CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
+  writeJsonFile(VOICE_LIVE_PATH, config);
 }
 
 function resolveVoiceId(personaId: string): string {
   return customVoiceConfig[personaId] || ELEVENLABS_VOICES[personaId] || "21m00Tcm4TlvDq8ikWAM";
 }
 
-// Load custom config at startup
 customVoiceConfig = loadVoiceConfig();
-// Merge Railway env var override — set VOICE_CONFIG={"persona-id":"elevenlabs-voice-id",...} for permanent persistence
 if (process.env.VOICE_CONFIG) {
   try {
     const envConfig = JSON.parse(process.env.VOICE_CONFIG);
@@ -96,35 +138,28 @@ if (process.env.VOICE_CONFIG) {
     console.error("[VoiceConfig] VOICE_CONFIG env var is not valid JSON — ignoring");
   }
 }
-console.log(`[VoiceConfig] Active: ${Object.keys(customVoiceConfig).length} custom mapping(s)`);
+console.log(`[VoiceConfig] Sources: seed=${VOICE_SEED_PATH} live=${VOICE_LIVE_PATH} active=${Object.keys(customVoiceConfig).length} mapping(s)`);
 
-// === Character Config Persistence ===
+// --- Character Config ---
 
-const CHARACTER_CONFIG_PATH = path.join(__dirname, "../data/character-config.json");
 let customCharacterNames: Record<string, string> = {};
 
 function loadCharacterConfig(): Record<string, string> {
-  try {
-    if (fs.existsSync(CHARACTER_CONFIG_PATH)) {
-      const raw = fs.readFileSync(CHARACTER_CONFIG_PATH, "utf-8");
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === "object" && parsed.names) return parsed.names;
-    }
-  } catch (err: any) {
-    console.error("[CharacterConfig] Failed to load:", err.message);
+  const merged: Record<string, string> = {};
+  const seed = readJsonFile(CHARACTER_SEED_PATH);
+  if (seed?.names && typeof seed.names === "object") Object.assign(merged, seed.names);
+  if (LIVE_IS_SEPARATE) {
+    const live = readJsonFile(CHARACTER_LIVE_PATH);
+    if (live?.names && typeof live.names === "object") Object.assign(merged, live.names);
   }
-  return {};
+  return merged;
 }
 
 function saveCharacterConfig(names: Record<string, string>): void {
-  const dir = path.dirname(CHARACTER_CONFIG_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(CHARACTER_CONFIG_PATH, JSON.stringify({ names }, null, 2), "utf-8");
+  writeJsonFile(CHARACTER_LIVE_PATH, { names });
 }
 
-// Load custom character config at startup
 customCharacterNames = loadCharacterConfig();
-// Merge Railway env var override — set CHARACTER_NAMES={"persona-id":"Custom Name",...} for permanent persistence
 if (process.env.CHARACTER_NAMES) {
   try {
     const envNames = JSON.parse(process.env.CHARACTER_NAMES);
@@ -136,7 +171,7 @@ if (process.env.CHARACTER_NAMES) {
     console.error("[CharacterConfig] CHARACTER_NAMES env var is not valid JSON — ignoring");
   }
 }
-console.log(`[CharacterConfig] Active: ${Object.keys(customCharacterNames).length} custom name(s)`);
+console.log(`[CharacterConfig] Sources: seed=${CHARACTER_SEED_PATH} live=${CHARACTER_LIVE_PATH} active=${Object.keys(customCharacterNames).length} name(s)`);
 
 // === Health Check ===
 
