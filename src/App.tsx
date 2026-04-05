@@ -31,15 +31,36 @@ export default function App() {
   const [recordingData, setRecordingData] = useState<SessionRecordingData | undefined>();
   const [characterCollection, setCharacterCollection] = useState<CollectionProgress>(loadCollection());
   const [unlockToast, setUnlockToast] = useState<string | null>(null);
+  const [customCharacterNames, setCustomCharacterNames] = useState<Record<string, string>>({});
+
+  // Load custom character names on mount
+  useEffect(() => {
+    fetch("/api/admin/character-config")
+      .then((r) => r.json())
+      .then((data: { names: Record<string, string> }) => setCustomCharacterNames(data.names || {}))
+      .catch(() => {}); // silently degrade
+  }, []);
+
+  const applyCustomNames = (personas: Persona[]): Persona[] =>
+    personas.map((p) => customCharacterNames[p.id] ? { ...p, name: customCharacterNames[p.id] } : p);
+
+  const refreshCharacterNames = () => {
+    fetch("/api/admin/character-config")
+      .then((r) => r.json())
+      .then((data: { names: Record<string, string> }) => setCustomCharacterNames(data.names || {}))
+      .catch(() => {});
+  };
 
   // === NAVIGATION ===
   const handleNavigate = (target: AppView) => {
+    // Refresh character names when leaving settings so next session uses updated names
+    if (view === "settings") refreshCharacterNames();
     setView(target);
   };
 
   // === PERFORM MODE HANDLERS ===
   const handleStartSession = (personas: Persona[], type: string) => {
-    setSelectedPersonas(personas);
+    setSelectedPersonas(applyCustomNames(personas));
     setSessionType(type);
     setView("script-setup");
   };
@@ -222,7 +243,7 @@ export default function App() {
 
           {view === "feedback" && (
             <motion.div key="feedback" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.5 }}>
-              <FeedbackView feedback={feedback} transcript={transcript} recordingData={recordingData} onNewSession={handleNewSession} onViewSession={handleViewSession} onViewProgress={() => setView("progress")} />
+              <FeedbackView feedback={feedback} transcript={transcript} recordingData={recordingData} personas={selectedPersonas} onNewSession={handleNewSession} onViewSession={handleViewSession} onViewProgress={() => setView("progress")} />
             </motion.div>
           )}
 
@@ -238,6 +259,7 @@ export default function App() {
                 onStartSession={handleStartSession}
                 onViewSession={handleViewSession}
                 collection={characterCollection}
+                customCharacterNames={customCharacterNames}
               />
             </motion.div>
           )}
@@ -246,6 +268,7 @@ export default function App() {
             <motion.div key="collection" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
               <CollectionDashboard
                 collection={characterCollection}
+                customCharacterNames={customCharacterNames}
               />
             </motion.div>
           )}

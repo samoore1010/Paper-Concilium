@@ -16,6 +16,7 @@ import {
   Check,
   Play,
   Loader2,
+  Tag,
 } from "lucide-react";
 import {
   AppSettings,
@@ -25,6 +26,11 @@ import {
 } from "../data/appSettings";
 import { getSessionHistory, clearHistory } from "../data/sessionHistory";
 import { PERSONA_LIBRARY, PERSONA_PACKS, Persona } from "../data/personas";
+import {
+  ELEVENLABS_DEFAULT_VOICES,
+  loadCustomVoiceConfig,
+  saveCustomVoiceConfig,
+} from "../data/voiceConfig";
 import { MiiAvatar } from "./MiiAvatar";
 
 // ============================================================
@@ -301,6 +307,9 @@ export function SettingsPage() {
       {/* Admin Voice Config */}
       <VoiceConfigPanel showToast={showToast} />
 
+      {/* Character Names */}
+      <CharacterNamesPanel showToast={showToast} />
+
       {/* About */}
       <SettingsPanel
         icon={<Info className="w-4 h-4" />}
@@ -515,13 +524,8 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 // ============================================================
-// Admin Voice Configuration Panel
+// Voice Configuration Panel
 // ============================================================
-
-interface VoiceConfigData {
-  defaults: Record<string, string>;
-  custom: Record<string, string>;
-}
 
 const PACK_LABELS: Record<string, string> = {
   general: "General Audience",
@@ -529,42 +533,155 @@ const PACK_LABELS: Record<string, string> = {
   "business-tank": "The Tank",
 };
 
-function VoiceConfigPanel({ showToast }: { showToast: (msg: string) => void }) {
-  const [config, setConfig] = useState<VoiceConfigData | null>(null);
+function CharacterNamesPanel({ showToast }: { showToast: (msg: string) => void }) {
+  const [customNames, setCustomNames] = useState<Record<string, string>>({});
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/admin/voice-config")
+    fetch("/api/admin/character-config")
       .then((r) => r.json())
-      .then((data: VoiceConfigData) => {
-        setConfig(data);
-        setEdits(data.custom);
+      .then((data: { names: Record<string, string> }) => {
+        setCustomNames(data.names || {});
+        setEdits(data.names || {});
       })
-      .catch(() => showToast("Failed to load voice config"))
+      .catch(() => showToast("Failed to load character names"))
       .finally(() => setLoading(false));
   }, [showToast]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await fetch("/api/admin/voice-config", {
+      const res = await fetch("/api/admin/character-config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ config: edits }),
+        body: JSON.stringify({ names: edits }),
       });
       if (!res.ok) throw new Error("Save failed");
-      setConfig((prev) => prev ? { ...prev, custom: { ...edits } } : prev);
+      setCustomNames({ ...edits });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-      showToast("Voice configuration saved");
+      showToast("Character names saved");
     } catch {
-      showToast("Failed to save voice config");
+      showToast("Failed to save character names");
     } finally {
       setSaving(false);
     }
+  };
+
+  const updateName = (personaId: string, name: string) => {
+    setEdits((prev) => {
+      const next = { ...prev };
+      if (name.trim()) {
+        next[personaId] = name;
+      } else {
+        delete next[personaId];
+      }
+      return next;
+    });
+  };
+
+  const hasChanges = JSON.stringify(edits) !== JSON.stringify(customNames);
+
+  const grouped = PERSONA_PACKS.map((pack) => ({
+    pack,
+    personas: PERSONA_LIBRARY.filter((p) => p.pack === pack.id),
+  }));
+
+  return (
+    <SettingsPanel
+      icon={<Tag className="w-4 h-4" />}
+      title="Character Names"
+      description="Customize display names for each character"
+    >
+      {loading ? (
+        <p className="text-label text-white/40">Loading...</p>
+      ) : (
+        <div className="space-y-5">
+          {grouped.map(({ pack, personas }) => (
+            <div key={pack.id}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm">{pack.icon}</span>
+                <h3 className="text-label font-medium text-white/60 uppercase tracking-wider">
+                  {PACK_LABELS[pack.id] || pack.name}
+                </h3>
+              </div>
+              <div className="space-y-1.5">
+                {personas.map((persona) => (
+                  <div key={persona.id} className="flex items-center gap-3 py-1.5">
+                    <div className="flex-shrink-0 w-8 h-8">
+                      <MiiAvatar persona={persona} size={32} />
+                    </div>
+                    <div className="flex-shrink-0 w-36 min-w-0">
+                      <p className="text-body text-white/50 truncate leading-tight text-xs">
+                        {persona.name}
+                      </p>
+                    </div>
+                    <input
+                      type="text"
+                      value={edits[persona.id] || ""}
+                      onChange={(e) => updateName(persona.id, e.target.value)}
+                      placeholder={persona.name}
+                      className="flex-1 min-w-0 bg-surface-overlay border border-white/5 rounded-lg px-2.5 py-1.5 text-label text-white/70 placeholder:text-white/25 focus:outline-none focus:border-violet-500/50"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div className="flex justify-end pt-2">
+            <button
+              onClick={handleSave}
+              disabled={!hasChanges || saving}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-label font-medium transition-colors ${
+                saved
+                  ? "bg-green-500/20 text-green-400"
+                  : hasChanges
+                    ? "bg-violet-500/20 text-violet-400 hover:bg-violet-500/30"
+                    : "bg-white/5 text-white/30 cursor-not-allowed"
+              }`}
+            >
+              {saved ? (
+                <><Check className="w-3.5 h-3.5" />Saved</>
+              ) : (
+                <><Save className="w-3.5 h-3.5" />{saving ? "Saving..." : "Save Names"}</>
+              )}
+            </button>
+          </div>
+
+          {/* Permanent config hint */}
+          {Object.keys(customNames).length > 0 && (
+            <div className="mt-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+              <p className="text-[10px] text-amber-400/80 font-medium mb-1.5">To make permanent (survives Railway redeploys):</p>
+              <p className="text-[10px] text-white/40 mb-1.5">Set this Railway environment variable:</p>
+              <code className="block text-[10px] text-amber-300/70 bg-black/20 rounded px-2 py-1.5 break-all font-mono select-all">
+                CHARACTER_NAMES={JSON.stringify(customNames)}
+              </code>
+            </div>
+          )}
+        </div>
+      )}
+    </SettingsPanel>
+  );
+}
+
+function VoiceConfigPanel({ showToast }: { showToast: (msg: string) => void }) {
+  const [saved, setSaved] = useState(false);
+  const [savedConfig, setSavedConfig] = useState<Record<string, string>>(() => loadCustomVoiceConfig());
+  const [edits, setEdits] = useState<Record<string, string>>(() => loadCustomVoiceConfig());
+
+  const handleSave = () => {
+    const cleaned: Record<string, string> = {};
+    for (const [key, value] of Object.entries(edits)) {
+      if (value.trim()) cleaned[key] = value.trim();
+    }
+    saveCustomVoiceConfig(cleaned);
+    setSavedConfig(cleaned);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+    showToast("Voice configuration saved");
   };
 
   const updateVoiceId = (personaId: string, voiceId: string) => {
@@ -579,8 +696,7 @@ function VoiceConfigPanel({ showToast }: { showToast: (msg: string) => void }) {
     });
   };
 
-  const hasChanges =
-    config && JSON.stringify(edits) !== JSON.stringify(config.custom);
+  const hasChanges = JSON.stringify(edits) !== JSON.stringify(savedConfig);
 
   // Group personas by pack
   const grouped = PERSONA_PACKS.map((pack) => ({
@@ -594,64 +710,60 @@ function VoiceConfigPanel({ showToast }: { showToast: (msg: string) => void }) {
       title="Voice Configuration"
       description="Map ElevenLabs voice IDs to characters"
     >
-      {loading ? (
-        <p className="text-label text-white/40">Loading voice config...</p>
-      ) : (
-        <div className="space-y-5">
-          {grouped.map(({ pack, personas }) => (
-            <div key={pack.id}>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-sm">{pack.icon}</span>
-                <h3 className="text-label font-medium text-white/60 uppercase tracking-wider">
-                  {PACK_LABELS[pack.id] || pack.name}
-                </h3>
-                <span className="text-label text-white/30">
-                  {personas.length}
-                </span>
-              </div>
-              <div className="space-y-1.5">
-                {personas.map((persona) => (
-                  <VoiceConfigRow
-                    key={persona.id}
-                    persona={persona}
-                    defaultVoiceId={config?.defaults[persona.id]}
-                    customVoiceId={edits[persona.id] || ""}
-                    onChange={(v) => updateVoiceId(persona.id, v)}
-                    showToast={showToast}
-                  />
-                ))}
-              </div>
+      <div className="space-y-5">
+        {grouped.map(({ pack, personas }) => (
+          <div key={pack.id}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-sm">{pack.icon}</span>
+              <h3 className="text-label font-medium text-white/60 uppercase tracking-wider">
+                {PACK_LABELS[pack.id] || pack.name}
+              </h3>
+              <span className="text-label text-white/30">
+                {personas.length}
+              </span>
             </div>
-          ))}
-
-          {/* Save button */}
-          <div className="flex justify-end pt-2">
-            <button
-              onClick={handleSave}
-              disabled={!hasChanges || saving}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-label font-medium transition-colors ${
-                saved
-                  ? "bg-green-500/20 text-green-400"
-                  : hasChanges
-                    ? "bg-violet-500/20 text-violet-400 hover:bg-violet-500/30"
-                    : "bg-white/5 text-white/30 cursor-not-allowed"
-              }`}
-            >
-              {saved ? (
-                <>
-                  <Check className="w-3.5 h-3.5" />
-                  Saved
-                </>
-              ) : (
-                <>
-                  <Save className="w-3.5 h-3.5" />
-                  {saving ? "Saving..." : "Save Voice Config"}
-                </>
-              )}
-            </button>
+            <div className="space-y-1.5">
+              {personas.map((persona) => (
+                <VoiceConfigRow
+                  key={persona.id}
+                  persona={persona}
+                  defaultVoiceId={ELEVENLABS_DEFAULT_VOICES[persona.id]}
+                  customVoiceId={edits[persona.id] || ""}
+                  onChange={(v) => updateVoiceId(persona.id, v)}
+                  showToast={showToast}
+                />
+              ))}
+            </div>
           </div>
+        ))}
+
+        {/* Save button */}
+        <div className="sticky bottom-0 bg-surface-raised flex justify-end pt-2 pb-1">
+          <button
+            onClick={handleSave}
+            disabled={!hasChanges}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-label font-medium transition-colors ${
+              saved
+                ? "bg-green-500/20 text-green-400"
+                : hasChanges
+                  ? "bg-violet-500/20 text-violet-400 hover:bg-violet-500/30"
+                  : "bg-white/5 text-white/30 cursor-not-allowed"
+            }`}
+          >
+            {saved ? (
+              <>
+                <Check className="w-3.5 h-3.5" />
+                Saved
+              </>
+            ) : (
+              <>
+                <Save className="w-3.5 h-3.5" />
+                Save Voice Config
+              </>
+            )}
+          </button>
         </div>
-      )}
+      </div>
     </SettingsPanel>
   );
 }

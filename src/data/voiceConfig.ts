@@ -7,6 +7,69 @@ export interface VoiceConfig {
   speed: number;        // OpenAI TTS speed (0.25-4.0)
 }
 
+// ElevenLabs voice IDs — default assignments for all personas.
+// General pack has hand-picked voices; bench/tank packs default to Rachel
+// until the user assigns custom IDs in Settings → Voice Configuration.
+export const ELEVENLABS_DEFAULT_VOICES: Record<string, string> = {
+  // General pack
+  "maria-chen":       "21m00Tcm4TlvDq8ikWAM", // Rachel
+  "james-wilson":     "fATgBRI8wg5KkDFg8vBd", // Custom
+  "aisha-johnson":    "EXAVITQu4vr4xnSDxMaL", // Bella
+  "carlos-reyes":     "ErXwobaYiN019PkySvjV",  // Antoni
+  "patricia-omalley": "MF3mGyEYCl7XYWbV9V6O", // Elli
+  "dev-patel":        "TxGEqnHWrfWFTfGW9XjX",  // Josh
+  // Legal pack — default Rachel until custom IDs are configured
+  "bench-institutionalist":    "21m00Tcm4TlvDq8ikWAM",
+  "bench-originalist":         "21m00Tcm4TlvDq8ikWAM",
+  "bench-prosecutor":          "21m00Tcm4TlvDq8ikWAM",
+  "bench-peoples-advocate":    "21m00Tcm4TlvDq8ikWAM",
+  "bench-pragmatic-scholar":   "21m00Tcm4TlvDq8ikWAM",
+  "bench-textualist":          "21m00Tcm4TlvDq8ikWAM",
+  "bench-precedent-keeper":    "21m00Tcm4TlvDq8ikWAM",
+  "bench-doctrine-purist":     "21m00Tcm4TlvDq8ikWAM",
+  "bench-living-constitutionalist": "21m00Tcm4TlvDq8ikWAM",
+  // Business pack — default Rachel until custom IDs are configured
+  "tank-royalty-king":       "21m00Tcm4TlvDq8ikWAM",
+  "tank-scale-hunter":       "21m00Tcm4TlvDq8ikWAM",
+  "tank-street-smart-closer": "21m00Tcm4TlvDq8ikWAM",
+  "tank-product-queen":      "21m00Tcm4TlvDq8ikWAM",
+  "tank-growth-driver":      "21m00Tcm4TlvDq8ikWAM",
+  "tank-brand-builder":      "21m00Tcm4TlvDq8ikWAM",
+};
+
+const VOICE_CONFIG_STORAGE_KEY = "concilium_voice_config";
+
+/** Load user's custom ElevenLabs voice ID overrides from localStorage. */
+export function loadCustomVoiceConfig(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(VOICE_CONFIG_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Persist user's custom ElevenLabs voice ID overrides to localStorage. */
+export function saveCustomVoiceConfig(config: Record<string, string>): void {
+  try {
+    localStorage.setItem(VOICE_CONFIG_STORAGE_KEY, JSON.stringify(config));
+  } catch {
+    // localStorage unavailable — silently degrade
+  }
+}
+
+/**
+ * Resolve the ElevenLabs voice ID for a persona.
+ * Checks localStorage custom config first, falls back to hardcoded defaults,
+ * then falls back to Rachel (the ElevenLabs universal default).
+ */
+export function getElevenLabsVoiceId(personaId: string): string {
+  const custom = loadCustomVoiceConfig();
+  return custom[personaId] || ELEVENLABS_DEFAULT_VOICES[personaId] || "21m00Tcm4TlvDq8ikWAM";
+}
+
 export const PERSONA_VOICE_MAP: Record<string, VoiceConfig> = {
   "maria-chen": {
     preferredGender: "female",

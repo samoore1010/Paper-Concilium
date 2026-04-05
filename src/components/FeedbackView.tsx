@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { CheckCircle, ArrowUpCircle, RotateCcw, BarChart3 } from "lucide-react";
 import { FeedbackItem } from "../data/feedbackEngine";
-import { PERSONA_LIBRARY } from "../data/personas";
+import { PERSONA_LIBRARY, Persona } from "../data/personas";
 import { MiiAvatar } from "./MiiAvatar";
 import ScrollFadeContainer from "./ScrollFadeContainer";
 import { getSessionHistory, SessionRecord } from "../data/sessionHistory";
@@ -13,6 +13,7 @@ interface FeedbackViewProps {
   feedback: FeedbackItem[];
   transcript: string;
   recordingData?: SessionRecordingData;
+  personas?: Persona[];  // optional override for custom names
   onNewSession: () => void;
   onViewSession?: (session: SessionRecord) => void;
   onViewProgress?: () => void;
@@ -98,7 +99,7 @@ function DeliveryStat({ label, value, unit, advice, invertColor, lowIsBad }: Del
   );
 }
 
-export function FeedbackView({ feedback, transcript, recordingData, onNewSession, onViewSession, onViewProgress }: FeedbackViewProps) {
+export function FeedbackView({ feedback, transcript, recordingData, personas: sessionPersonas, onNewSession, onViewSession, onViewProgress }: FeedbackViewProps) {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [tab, setTab] = useState<"feedback" | "recording" | "history">("feedback");
   const [sessionHistory, setSessionHistory] = useState<SessionRecord[]>([]);
@@ -114,7 +115,7 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
   const visual = latestSession?.visualMetrics;
 
   const selected = feedback[selectedIdx];
-  const persona = PERSONA_LIBRARY.find((p) => p.id === selected?.personaId);
+  const persona = sessionPersonas?.find((p) => p.id === selected?.personaId) ?? PERSONA_LIBRARY.find((p) => p.id === selected?.personaId);
 
   const scoreColor = (s: number) => s >= 7 ? "text-emerald-400" : s >= 5 ? "text-yellow-400" : "text-red-400";
   const scoreBg = (s: number) => s >= 7 ? "bg-emerald-500/10 border-emerald-500/20" : s >= 5 ? "bg-yellow-500/10 border-yellow-500/20" : "bg-red-500/10 border-red-500/20";
@@ -202,7 +203,7 @@ export function FeedbackView({ feedback, transcript, recordingData, onNewSession
                   fadeColor="#0f0f23"
                 >
                   {feedback.map((fb, i) => {
-                    const p = PERSONA_LIBRARY.find((pp) => pp.id === fb.personaId);
+                    const p = sessionPersonas?.find((pp) => pp.id === fb.personaId) ?? PERSONA_LIBRARY.find((pp) => pp.id === fb.personaId);
                     if (!p) return null;
                     return (
                       <button

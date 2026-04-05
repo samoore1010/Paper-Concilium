@@ -84,7 +84,59 @@ function resolveVoiceId(personaId: string): string {
 
 // Load custom config at startup
 customVoiceConfig = loadVoiceConfig();
-console.log(`[VoiceConfig] Loaded ${Object.keys(customVoiceConfig).length} custom voice mapping(s)`);
+// Merge Railway env var override — set VOICE_CONFIG={"persona-id":"elevenlabs-voice-id",...} for permanent persistence
+if (process.env.VOICE_CONFIG) {
+  try {
+    const envConfig = JSON.parse(process.env.VOICE_CONFIG);
+    if (envConfig && typeof envConfig === "object") {
+      customVoiceConfig = { ...customVoiceConfig, ...envConfig };
+      console.log(`[VoiceConfig] Applied ${Object.keys(envConfig).length} env var override(s) from VOICE_CONFIG`);
+    }
+  } catch {
+    console.error("[VoiceConfig] VOICE_CONFIG env var is not valid JSON — ignoring");
+  }
+}
+console.log(`[VoiceConfig] Active: ${Object.keys(customVoiceConfig).length} custom mapping(s)`);
+
+// === Character Config Persistence ===
+
+const CHARACTER_CONFIG_PATH = path.join(__dirname, "../data/character-config.json");
+let customCharacterNames: Record<string, string> = {};
+
+function loadCharacterConfig(): Record<string, string> {
+  try {
+    if (fs.existsSync(CHARACTER_CONFIG_PATH)) {
+      const raw = fs.readFileSync(CHARACTER_CONFIG_PATH, "utf-8");
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && parsed.names) return parsed.names;
+    }
+  } catch (err: any) {
+    console.error("[CharacterConfig] Failed to load:", err.message);
+  }
+  return {};
+}
+
+function saveCharacterConfig(names: Record<string, string>): void {
+  const dir = path.dirname(CHARACTER_CONFIG_PATH);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(CHARACTER_CONFIG_PATH, JSON.stringify({ names }, null, 2), "utf-8");
+}
+
+// Load custom character config at startup
+customCharacterNames = loadCharacterConfig();
+// Merge Railway env var override — set CHARACTER_NAMES={"persona-id":"Custom Name",...} for permanent persistence
+if (process.env.CHARACTER_NAMES) {
+  try {
+    const envNames = JSON.parse(process.env.CHARACTER_NAMES);
+    if (envNames && typeof envNames === "object") {
+      customCharacterNames = { ...customCharacterNames, ...envNames };
+      console.log(`[CharacterConfig] Applied ${Object.keys(envNames).length} env var override(s) from CHARACTER_NAMES`);
+    }
+  } catch {
+    console.error("[CharacterConfig] CHARACTER_NAMES env var is not valid JSON — ignoring");
+  }
+}
+console.log(`[CharacterConfig] Active: ${Object.keys(customCharacterNames).length} custom name(s)`);
 
 // === Health Check ===
 
@@ -181,7 +233,7 @@ app.get("/api/scribe-token", async (_req, res) => {
 // === Streaming TTS Endpoint ===
 
 app.post("/api/tts/stream", async (req, res) => {
-  const { text, personaId, provider } = req.body;
+  const { text, personaId, voiceId: clientVoiceId, provider } = req.body;
   if (!text) return res.status(400).json({ error: "text required" });
 
   const apiKey = process.env.ELEVENLABS_API_KEY;
@@ -190,9 +242,12 @@ app.post("/api/tts/stream", async (req, res) => {
   // Use ElevenLabs streaming endpoint
   if (apiKey && (provider === "elevenlabs" || provider === "auto")) {
     try {
-      const voiceId = resolveVoiceId(personaId);
-      const isCustom = !!customVoiceConfig[personaId];
-      console.log(`[TTS:Stream] ElevenLabs voice="${voiceId}" persona="${personaId}" source=${isCustom ? "custom" : "default"}`);
+      // Prefer client-provided voice ID (from user's localStorage config) over server-side lookup
+      const usingClientVoice = !!(clientVoiceId && typeof clientVoiceId === "string" && clientVoiceId.trim());
+      const voiceId = usingClientVoice
+        ? clientVoiceId.trim()
+        : resolveVoiceId(personaId);
+      console.log(`[TTS:Stream] ElevenLabs voice="${voiceId}" persona="${personaId}" source=${usingClientVoice ? "client" : (customVoiceConfig[personaId] ? "server-custom" : "default")}`);
 
       const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`, {
         method: "POST",
@@ -260,14 +315,14 @@ app.post("/api/tts/stream", async (req, res) => {
 // === TTS Endpoint (multi-provider) ===
 
 app.post("/api/tts", async (req, res) => {
-  const { text, personaId, speed, provider } = req.body;
+  const { text, personaId, voiceId: clientVoiceId, speed, provider } = req.body;
   if (!text) return res.status(400).json({ error: "text required" });
 
   const requested = provider || "auto";
 
   // ElevenLabs (premium) — preferred when explicitly requested or auto with key
   if ((requested === "elevenlabs" || requested === "auto") && process.env.ELEVENLABS_API_KEY) {
-    return ttsElevenLabs(text, personaId, res);
+    return ttsElevenLabs(text, personaId, clientVoiceId, res);
   }
 
   // OpenAI — standard
@@ -304,12 +359,15 @@ async function ttsOpenAI(text: string, personaId: string, speed: number, res: an
   }
 }
 
-async function ttsElevenLabs(text: string, personaId: string, res: any) {
+async function ttsElevenLabs(text: string, personaId: string, clientVoiceId: string | undefined, res: any) {
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) return res.status(503).json({ error: "ElevenLabs not configured" });
 
   try {
-    const voiceId = resolveVoiceId(personaId);
+    // Prefer client-provided voice ID (from user's localStorage config) over server-side lookup
+    const voiceId = (clientVoiceId && typeof clientVoiceId === "string" && clientVoiceId.trim())
+      ? clientVoiceId.trim()
+      : resolveVoiceId(personaId);
     const keyPreview = apiKey.substring(0, 4) + "..." + apiKey.substring(apiKey.length - 4);
     console.log(`[TTS:ElevenLabs] voiceId="${voiceId}" persona="${personaId}" keyPreview="${keyPreview}" keyLength=${apiKey.length}`);
 
@@ -457,7 +515,7 @@ app.post("/api/react", async (req, res) => {
 
   const effectiveSessionType = sessionType || "business-pitch";
   try {
-    const persona = getPersonaPrompt(personaId, effectiveSessionType);
+    const persona = getPersonaPrompt(personaId, effectiveSessionType, customCharacterNames[personaId] || undefined);
     const prompt = buildReactionPrompt(persona, userText, effectiveSessionType, messageHistory || [], sourceContext || undefined);
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001", max_tokens: 300,
@@ -484,7 +542,7 @@ app.post("/api/react-batch", async (req, res) => {
   try {
     const results = await Promise.allSettled(
       personaIds.map(async (personaId: string) => {
-        const persona = getPersonaPrompt(personaId, effectiveSessionType);
+        const persona = getPersonaPrompt(personaId, effectiveSessionType, customCharacterNames[personaId] || undefined);
         const prompt = buildReactionPrompt(persona, userText, effectiveSessionType, messageHistory || [], sourceContext || undefined);
         const message = await client.messages.create({
           model: "claude-haiku-4-5-20251001", max_tokens: 300,
@@ -517,7 +575,7 @@ app.post("/api/feedback", async (req, res) => {
 
   const effectiveSessionType = sessionType || "business-pitch";
   try {
-    const persona = getPersonaPrompt(personaId, effectiveSessionType);
+    const persona = getPersonaPrompt(personaId, effectiveSessionType, customCharacterNames[personaId] || undefined);
     const prompt = buildFeedbackPrompt(persona, transcript, effectiveSessionType);
     console.log(`[Feedback] Generating for ${personaId}...`);
 
@@ -551,7 +609,7 @@ app.post("/api/feedback-batch", async (req, res) => {
     const feedback: any[] = [];
     for (const personaId of personaIds) {
       try {
-        const persona = getPersonaPrompt(personaId, effectiveSessionType);
+        const persona = getPersonaPrompt(personaId, effectiveSessionType, customCharacterNames[personaId] || undefined);
         const prompt = buildFeedbackPrompt(persona, transcript, effectiveSessionType);
         const message = await client.messages.create({
           model: "claude-sonnet-4-6", max_tokens: 1500,
@@ -780,13 +838,43 @@ app.put("/api/admin/voice-config", (req, res) => {
   }
 
   try {
-    saveVoiceConfig(cleaned);
     customVoiceConfig = cleaned;
+    saveVoiceConfig(cleaned);
     console.log(`[VoiceConfig] Saved ${Object.keys(cleaned).length} custom voice mapping(s)`);
     res.json({ saved: true, count: Object.keys(cleaned).length });
   } catch (err: any) {
     console.error("[VoiceConfig] Save error:", err.message);
     res.status(500).json({ error: "Failed to save voice config", detail: err.message });
+  }
+});
+
+// === Admin Character Config ===
+
+app.get("/api/admin/character-config", (_req, res) => {
+  res.json({ names: customCharacterNames });
+});
+
+app.put("/api/admin/character-config", (req, res) => {
+  const { names } = req.body;
+  if (!names || typeof names !== "object") {
+    return res.status(400).json({ error: "names object required" });
+  }
+
+  const cleaned: Record<string, string> = {};
+  for (const [key, value] of Object.entries(names)) {
+    if (typeof value === "string" && value.trim()) {
+      cleaned[key] = value.trim();
+    }
+  }
+
+  try {
+    customCharacterNames = cleaned;
+    saveCharacterConfig(cleaned);
+    console.log(`[CharacterConfig] Saved ${Object.keys(cleaned).length} custom name(s)`);
+    res.json({ saved: true, count: Object.keys(cleaned).length });
+  } catch (err: any) {
+    console.error("[CharacterConfig] Save error:", err.message);
+    res.status(500).json({ error: "Failed to save character config", detail: err.message });
   }
 });
 

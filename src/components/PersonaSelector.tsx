@@ -17,14 +17,16 @@ interface PersonaSelectorProps {
   onStartSession: (personas: Persona[], sessionType: string) => void;
   onViewSession?: (session: SessionRecord) => void;
   collection: CollectionProgress;
+  customCharacterNames?: Record<string, string>;
 }
 
-const SESSION_TYPES = [
-  { id: "business-pitch", label: "Business Pitch", desc: "Practice pitching your startup or product to investors" },
-  { id: "mock-trial", label: "Mock Trial / Oral Argument", desc: "Present legal arguments to a simulated jury or judge panel" },
-  { id: "public-speaking", label: "Public Speaking", desc: "Practice a keynote, class presentation, or speech" },
-  { id: "sales-demo", label: "Sales Demo", desc: "Rehearse a product demo for prospective clients" },
-];
+/** Session type labels keyed by pack sessionType */
+const SESSION_TYPE_LABELS: Record<string, string> = {
+  "business-pitch": "Business Pitch",
+  "mock-trial": "Mock Trial / Oral Argument",
+  "public-speaking": "Public Speaking",
+  "sales-demo": "Sales Demo",
+};
 
 /** Pack accent colors for themed glows */
 const PACK_COLORS: Record<PersonaPack, string> = {
@@ -33,13 +35,15 @@ const PACK_COLORS: Record<PersonaPack, string> = {
   "business-tank": "#d4a017",
 };
 
-export function PersonaSelector({ onStartSession, onViewSession, collection }: PersonaSelectorProps) {
+export function PersonaSelector({ onStartSession, onViewSession, collection, customCharacterNames = {} }: PersonaSelectorProps) {
+  const getName = (persona: Persona) => customCharacterNames[persona.id] || persona.name;
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sessionType, setSessionType] = useState("business-pitch");
   const [activePack, setActivePack] = useState<PersonaPack>("general");
   const [recentSessions, setRecentSessions] = useState<SessionRecord[]>([]);
   const [spotlightPersona, setSpotlightPersona] = useState<Persona | null>(null);
   const [selectFlash, setSelectFlash] = useState<string | null>(null);
+  const [recentSessionsExpanded, setRecentSessionsExpanded] = useState(false);
 
   useEffect(() => {
     setRecentSessions(getRecentSessions(3));
@@ -105,90 +109,48 @@ export function PersonaSelector({ onStartSession, onViewSession, collection }: P
           </button>
         </div>
       )}
-        {/* Recent Sessions */}
-        {recentSessions.length > 0 && (
-          <section className="mb-section-sm md:mb-section">
-            <h2 className="text-sm font-medium text-white/60 uppercase tracking-wider mb-subsection-sm md:mb-subsection">Recent Sessions</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {recentSessions.map((session) => {
-                const scoreColor = session.overallScore >= 7 ? "text-emerald-400" : session.overallScore >= 5 ? "text-yellow-400" : "text-red-400";
-                const scoreBg = session.overallScore >= 7 ? "bg-emerald-500/10 border-emerald-500/20" : session.overallScore >= 5 ? "bg-yellow-500/10 border-yellow-500/20" : "bg-red-500/10 border-red-500/20";
-                const date = new Date(session.date).toLocaleDateString();
-                return (
-                  <button
-                    key={session.id}
-                    onClick={() => session.feedback && onViewSession?.(session)}
-                    className={`rounded-lg border p-3 text-left transition-all ${scoreBg} ${session.feedback ? "hover:brightness-125 cursor-pointer" : "opacity-60 cursor-default"}`}
-                  >
-                    <div className="text-xs text-white/50 mb-1">{date}</div>
-                    <div className="text-sm font-medium text-white mb-1">{session.sessionType.replace(/-/g, " ")}</div>
-                    <div className={`text-lg font-bold ${scoreColor}`}>{(session.overallScore || 0).toFixed(1)}/10</div>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="text-xs text-white/40">{session.personaIds.length} personas</span>
-                      {session.feedback && <span className="text-caption text-blue-400">View report</span>}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        )}
 
-        {/* Section Divider */}
-        {recentSessions.length > 0 && (
-          <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-section-sm md:mb-section" />
-        )}
-
-        {/* Session Type */}
+        {/* ===== HERO / WELCOME AREA ===== */}
         <section className="mb-section-sm md:mb-section">
-          <h2 className="text-sm font-medium text-white/60 uppercase tracking-wider mb-subsection-sm md:mb-subsection">Session Type</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {SESSION_TYPES.map((st) => (
-              <button
-                key={st.id}
-                onClick={() => setSessionType(st.id)}
-                className={`text-left p-4 rounded-lg border transition-all ${
-                  sessionType === st.id
-                    ? "border-blue-400 bg-blue-500/10"
-                    : "border-white/5 bg-surface-raised hover:bg-surface-overlay"
-                }`}
-              >
-                <div className="text-sm font-medium mb-1">{st.label}</div>
-                <div className="text-xs text-white/40 leading-relaxed">{st.desc}</div>
-              </button>
-            ))}
-          </div>
+          <h1 className="text-xl md:text-2xl font-semibold text-white mb-1">
+            {recentSessions.length > 0 ? "Ready for another round?" : "Practice makes perfect"}
+          </h1>
+          <p className="text-sm text-white/50">
+            Choose your audience and start presenting.
+          </p>
         </section>
 
-        {/* Section Divider */}
-        <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-section-sm md:mb-section" />
-
-        {/* Audience Pack Selection */}
+        {/* ===== CHOOSE YOUR AUDIENCE ===== */}
         <section>
           <div className="flex items-center justify-between mb-subsection-sm md:mb-subsection">
             <h2 className="text-sm font-medium text-white/60 uppercase tracking-wider">Choose Your Audience</h2>
           </div>
 
-          {/* Pack Tabs with slide animation */}
+          {/* Pack Tabs — enriched with session type context */}
           <div className="grid grid-cols-1 md:flex md:flex-wrap gap-2 md:gap-3 mb-subsection-sm md:mb-subsection">
-            {PERSONA_PACKS.map((pack) => (
-              <button
-                key={pack.id}
-                onClick={() => handlePackChange(pack.id)}
-                className={`text-left p-4 rounded-lg border transition-all md:flex-1 md:min-w-[250px] ${
-                  activePack === pack.id
-                    ? "border-blue-400 bg-blue-500/10"
-                    : "border-white/5 bg-surface-raised hover:bg-surface-overlay"
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-lg">{pack.icon}</span>
-                  <span className="font-medium text-sm">{pack.name}</span>
-                </div>
-                <div className="text-caption text-white/40 uppercase tracking-wider mb-1">{pack.subtitle}</div>
-                <div className="text-xs text-white/40 leading-relaxed line-clamp-2">{pack.description}</div>
-              </button>
-            ))}
+            {PERSONA_PACKS.map((pack) => {
+              const sessionLabel = SESSION_TYPE_LABELS[pack.sessionType] || pack.sessionType;
+              return (
+                <button
+                  key={pack.id}
+                  onClick={() => handlePackChange(pack.id)}
+                  className={`text-left p-4 rounded-lg border transition-all md:flex-1 md:min-w-[250px] ${
+                    activePack === pack.id
+                      ? "border-blue-400 bg-blue-500/10"
+                      : "border-white/5 bg-surface-raised hover:bg-surface-overlay"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-lg">{pack.icon}</span>
+                    <span className="font-medium text-sm">{pack.name}</span>
+                  </div>
+                  <div className="text-caption text-white/40 uppercase tracking-wider mb-1">
+                    {pack.subtitle} — {sessionLabel}
+                  </div>
+                  <div className="text-xs text-white/40 leading-relaxed line-clamp-2">{pack.description}</div>
+                </button>
+              );
+            })}
           </div>
 
           <div className="mb-subsection-sm md:mb-subsection px-4 py-3 rounded-lg border border-white/5 bg-surface-raised text-xs text-white/50 leading-relaxed">
@@ -266,7 +228,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection }: P
                         <div className={`text-caption font-medium mt-1 truncate w-full text-center ${
                           !unlocked ? "text-white/15" : "text-white/80"
                         }`}>
-                          {unlocked ? persona.name.split(" ")[0] : "???"}
+                          {unlocked ? getName(persona).split(" ")[0] : "???"}
                         </div>
 
                         {/* Lock icon overlay */}
@@ -315,6 +277,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection }: P
                     collection={collection}
                     packColor={packColor}
                     onToggle={() => togglePersona(spotlightPersona)}
+                    displayName={getName(spotlightPersona)}
                   />
                 ) : (
                   <motion.div
@@ -378,7 +341,7 @@ export function PersonaSelector({ onStartSession, onViewSession, collection }: P
                           </svg>
                         </div>
                       </div>
-                      <span className="text-caption text-white/50 font-medium">{persona.name.split(" ")[0]}</span>
+                      <span className="text-caption text-white/50 font-medium">{getName(persona).split(" ")[0]}</span>
                     </motion.button>
                   ))}
                 </ScrollFadeContainer>
@@ -386,6 +349,65 @@ export function PersonaSelector({ onStartSession, onViewSession, collection }: P
             )}
           </AnimatePresence>
         </section>
+
+        {/* ===== RECENT SESSIONS (collapsed, de-emphasized) ===== */}
+        {recentSessions.length > 0 && (
+          <>
+            <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mt-section-sm md:mt-section" />
+            <section className="mt-section-sm md:mt-section">
+              <button
+                onClick={() => setRecentSessionsExpanded((prev) => !prev)}
+                className="flex items-center gap-2 text-sm text-white/40 hover:text-white/60 transition-colors w-full"
+              >
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  className={`transition-transform ${recentSessionsExpanded ? "rotate-90" : ""}`}
+                >
+                  <path d="M6 3l5 5-5 5V3z" />
+                </svg>
+                <span className="text-xs font-medium uppercase tracking-wider">Recent Sessions</span>
+                <span className="text-xs text-white/25">({recentSessions.length})</span>
+              </button>
+              <AnimatePresence>
+                {recentSessionsExpanded && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+                      {recentSessions.map((session) => {
+                        const scoreColor = session.overallScore >= 7 ? "text-emerald-400" : session.overallScore >= 5 ? "text-yellow-400" : "text-red-400";
+                        const scoreBg = session.overallScore >= 7 ? "bg-emerald-500/10 border-emerald-500/20" : session.overallScore >= 5 ? "bg-yellow-500/10 border-yellow-500/20" : "bg-red-500/10 border-red-500/20";
+                        const date = new Date(session.date).toLocaleDateString();
+                        return (
+                          <button
+                            key={session.id}
+                            onClick={() => session.feedback && onViewSession?.(session)}
+                            className={`rounded-lg border p-3 text-left transition-all ${scoreBg} ${session.feedback ? "hover:brightness-125 cursor-pointer" : "opacity-60 cursor-default"}`}
+                          >
+                            <div className="text-xs text-white/50 mb-1">{date}</div>
+                            <div className="text-sm font-medium text-white mb-1">{session.sessionType.replace(/-/g, " ")}</div>
+                            <div className={`text-lg font-bold ${scoreColor}`}>{(session.overallScore || 0).toFixed(1)}/10</div>
+                            <div className="flex items-center justify-between mt-1">
+                              <span className="text-xs text-white/40">{session.personaIds.length} personas</span>
+                              {session.feedback && <span className="text-caption text-blue-400">View report</span>}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </section>
+          </>
+        )}
     </div>
   );
 }
@@ -398,6 +420,7 @@ function SpotlightPanel({
   collection,
   packColor,
   onToggle,
+  displayName,
 }: {
   persona: Persona;
   unlocked: boolean;
@@ -405,6 +428,7 @@ function SpotlightPanel({
   collection: CollectionProgress;
   packColor: string;
   onToggle: () => void;
+  displayName?: string;
 }) {
   const stats = getCharacterStats(collection, persona.id);
   const req = getUnlockRequirement(persona.id);
@@ -451,7 +475,7 @@ function SpotlightPanel({
         <div className="mb-3">
           <div className="flex items-center gap-2">
             <h3 className="text-lg font-semibold">
-              {unlocked ? persona.name : "???"}
+              {unlocked ? (displayName ?? persona.name) : "???"}
             </h3>
             {unlocked && (
               <span className="text-caption px-1.5 py-0.5 rounded bg-surface-overlay text-white/50">
