@@ -14,6 +14,8 @@ import {
   Volume2,
   Save,
   Check,
+  Play,
+  Loader2,
   Tag,
 } from "lucide-react";
 import {
@@ -24,6 +26,11 @@ import {
 } from "../data/appSettings";
 import { getSessionHistory, clearHistory } from "../data/sessionHistory";
 import { PERSONA_LIBRARY, PERSONA_PACKS, Persona } from "../data/personas";
+import {
+  ELEVENLABS_DEFAULT_VOICES,
+  loadCustomVoiceConfig,
+  saveCustomVoiceConfig,
+} from "../data/voiceConfig";
 import { MiiAvatar } from "./MiiAvatar";
 
 // ============================================================
@@ -517,13 +524,8 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 // ============================================================
-// Admin Voice Configuration Panel
+// Voice Configuration Panel
 // ============================================================
-
-interface VoiceConfigData {
-  defaults: Record<string, string>;
-  custom: Record<string, string>;
-}
 
 const PACK_LABELS: Record<string, string> = {
   general: "General Audience",
@@ -666,41 +668,20 @@ function CharacterNamesPanel({ showToast }: { showToast: (msg: string) => void }
 }
 
 function VoiceConfigPanel({ showToast }: { showToast: (msg: string) => void }) {
-  const [config, setConfig] = useState<VoiceConfigData | null>(null);
-  const [edits, setEdits] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [savedConfig, setSavedConfig] = useState<Record<string, string>>(() => loadCustomVoiceConfig());
+  const [edits, setEdits] = useState<Record<string, string>>(() => loadCustomVoiceConfig());
 
-  useEffect(() => {
-    fetch("/api/admin/voice-config")
-      .then((r) => r.json())
-      .then((data: VoiceConfigData) => {
-        setConfig(data);
-        setEdits(data.custom);
-      })
-      .catch(() => showToast("Failed to load voice config"))
-      .finally(() => setLoading(false));
-  }, [showToast]);
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const res = await fetch("/api/admin/voice-config", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ config: edits }),
-      });
-      if (!res.ok) throw new Error("Save failed");
-      setConfig((prev) => prev ? { ...prev, custom: { ...edits } } : prev);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-      showToast("Voice configuration saved");
-    } catch {
-      showToast("Failed to save voice config");
-    } finally {
-      setSaving(false);
+  const handleSave = () => {
+    const cleaned: Record<string, string> = {};
+    for (const [key, value] of Object.entries(edits)) {
+      if (value.trim()) cleaned[key] = value.trim();
     }
+    saveCustomVoiceConfig(cleaned);
+    setSavedConfig(cleaned);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+    showToast("Voice configuration saved");
   };
 
   const updateVoiceId = (personaId: string, voiceId: string) => {
@@ -715,8 +696,7 @@ function VoiceConfigPanel({ showToast }: { showToast: (msg: string) => void }) {
     });
   };
 
-  const hasChanges =
-    config && JSON.stringify(edits) !== JSON.stringify(config.custom);
+  const hasChanges = JSON.stringify(edits) !== JSON.stringify(savedConfig);
 
   // Group personas by pack
   const grouped = PERSONA_PACKS.map((pack) => ({
@@ -730,74 +710,60 @@ function VoiceConfigPanel({ showToast }: { showToast: (msg: string) => void }) {
       title="Voice Configuration"
       description="Map ElevenLabs voice IDs to characters"
     >
-      {loading ? (
-        <p className="text-label text-white/40">Loading voice config...</p>
-      ) : (
-        <div className="space-y-5">
-          {grouped.map(({ pack, personas }) => (
-            <div key={pack.id}>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-sm">{pack.icon}</span>
-                <h3 className="text-label font-medium text-white/60 uppercase tracking-wider">
-                  {PACK_LABELS[pack.id] || pack.name}
-                </h3>
-                <span className="text-label text-white/30">
-                  {personas.length}
-                </span>
-              </div>
-              <div className="space-y-1.5">
-                {personas.map((persona) => (
-                  <VoiceConfigRow
-                    key={persona.id}
-                    persona={persona}
-                    defaultVoiceId={config?.defaults[persona.id]}
-                    customVoiceId={edits[persona.id] || ""}
-                    onChange={(v) => updateVoiceId(persona.id, v)}
-                  />
-                ))}
-              </div>
+      <div className="space-y-5">
+        {grouped.map(({ pack, personas }) => (
+          <div key={pack.id}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-sm">{pack.icon}</span>
+              <h3 className="text-label font-medium text-white/60 uppercase tracking-wider">
+                {PACK_LABELS[pack.id] || pack.name}
+              </h3>
+              <span className="text-label text-white/30">
+                {personas.length}
+              </span>
             </div>
-          ))}
-
-          {/* Save button */}
-          <div className="sticky bottom-0 bg-surface-raised flex justify-end pt-2 pb-1">
-            <button
-              onClick={handleSave}
-              disabled={!hasChanges || saving}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-label font-medium transition-colors ${
-                saved
-                  ? "bg-green-500/20 text-green-400"
-                  : hasChanges
-                    ? "bg-violet-500/20 text-violet-400 hover:bg-violet-500/30"
-                    : "bg-white/5 text-white/30 cursor-not-allowed"
-              }`}
-            >
-              {saved ? (
-                <>
-                  <Check className="w-3.5 h-3.5" />
-                  Saved
-                </>
-              ) : (
-                <>
-                  <Save className="w-3.5 h-3.5" />
-                  {saving ? "Saving..." : "Save Voice Config"}
-                </>
-              )}
-            </button>
+            <div className="space-y-1.5">
+              {personas.map((persona) => (
+                <VoiceConfigRow
+                  key={persona.id}
+                  persona={persona}
+                  defaultVoiceId={ELEVENLABS_DEFAULT_VOICES[persona.id]}
+                  customVoiceId={edits[persona.id] || ""}
+                  onChange={(v) => updateVoiceId(persona.id, v)}
+                  showToast={showToast}
+                />
+              ))}
+            </div>
           </div>
+        ))}
 
-          {/* Permanent config hint */}
-          {config && Object.keys(config.custom).length > 0 && (
-            <div className="mt-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-              <p className="text-[10px] text-amber-400/80 font-medium mb-1.5">To make permanent (survives Railway redeploys):</p>
-              <p className="text-[10px] text-white/40 mb-1.5">Set this Railway environment variable:</p>
-              <code className="block text-[10px] text-amber-300/70 bg-black/20 rounded px-2 py-1.5 break-all font-mono select-all">
-                VOICE_CONFIG={JSON.stringify(config.custom)}
-              </code>
-            </div>
-          )}
+        {/* Save button */}
+        <div className="sticky bottom-0 bg-surface-raised flex justify-end pt-2 pb-1">
+          <button
+            onClick={handleSave}
+            disabled={!hasChanges}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-label font-medium transition-colors ${
+              saved
+                ? "bg-green-500/20 text-green-400"
+                : hasChanges
+                  ? "bg-violet-500/20 text-violet-400 hover:bg-violet-500/30"
+                  : "bg-white/5 text-white/30 cursor-not-allowed"
+            }`}
+          >
+            {saved ? (
+              <>
+                <Check className="w-3.5 h-3.5" />
+                Saved
+              </>
+            ) : (
+              <>
+                <Save className="w-3.5 h-3.5" />
+                Save Voice Config
+              </>
+            )}
+          </button>
         </div>
-      )}
+      </div>
     </SettingsPanel>
   );
 }
@@ -807,13 +773,61 @@ function VoiceConfigRow({
   defaultVoiceId,
   customVoiceId,
   onChange,
+  showToast,
 }: {
   persona: Persona;
   defaultVoiceId?: string;
   customVoiceId: string;
   onChange: (v: string) => void;
+  showToast: (msg: string) => void;
 }) {
   const hasCustom = !!customVoiceId.trim();
+  const [testing, setTesting] = useState(false);
+
+  const effectiveVoiceId = customVoiceId.trim() || defaultVoiceId || "";
+
+  const handleTest = async () => {
+    if (!effectiveVoiceId) {
+      showToast("No voice ID to test");
+      return;
+    }
+    setTesting(true);
+    try {
+      const res = await fetch("/api/admin/voice-config/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          voiceId: effectiveVoiceId,
+          text: `Hello, I'm ${persona.name}. This is a voice test.`,
+        }),
+      });
+
+      if (!res.ok) {
+        let msg = `Voice test failed (${res.status})`;
+        try {
+          const data = await res.json();
+          if (data?.detail) msg = `ElevenLabs: ${String(data.detail).slice(0, 120)}`;
+          else if (data?.error) msg = data.error;
+        } catch {}
+        showToast(msg);
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.onended = () => URL.revokeObjectURL(url);
+      audio.onerror = () => {
+        URL.revokeObjectURL(url);
+        showToast("Audio playback failed");
+      };
+      await audio.play();
+    } catch (err: any) {
+      showToast(`Test error: ${err?.message || "unknown"}`);
+    } finally {
+      setTesting(false);
+    }
+  };
 
   return (
     <div className="flex items-center gap-3 py-1.5">
@@ -848,6 +862,21 @@ function VoiceConfigRow({
         placeholder={defaultVoiceId || "Rachel (default)"}
         className="flex-1 min-w-0 bg-surface-overlay border border-white/5 rounded-lg px-2.5 py-1.5 text-label text-white/70 placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 font-mono"
       />
+
+      {/* Test button — plays a sample so user can verify the voice ID works */}
+      <button
+        type="button"
+        onClick={handleTest}
+        disabled={testing || !effectiveVoiceId}
+        title="Preview this voice"
+        className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-surface-overlay border border-white/5 text-white/60 hover:text-violet-400 hover:border-violet-500/50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      >
+        {testing ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        ) : (
+          <Play className="w-3.5 h-3.5" />
+        )}
+      </button>
     </div>
   );
 }

@@ -233,7 +233,7 @@ app.get("/api/scribe-token", async (_req, res) => {
 // === Streaming TTS Endpoint ===
 
 app.post("/api/tts/stream", async (req, res) => {
-  const { text, personaId, provider } = req.body;
+  const { text, personaId, voiceId: clientVoiceId, provider } = req.body;
   if (!text) return res.status(400).json({ error: "text required" });
 
   const apiKey = process.env.ELEVENLABS_API_KEY;
@@ -242,8 +242,12 @@ app.post("/api/tts/stream", async (req, res) => {
   // Use ElevenLabs streaming endpoint
   if (apiKey && (provider === "elevenlabs" || provider === "auto")) {
     try {
-      const voiceId = resolveVoiceId(personaId);
-      console.log(`[TTS:Stream] ElevenLabs voice="${voiceId}" persona="${personaId}"`);
+      // Prefer client-provided voice ID (from user's localStorage config) over server-side lookup
+      const usingClientVoice = !!(clientVoiceId && typeof clientVoiceId === "string" && clientVoiceId.trim());
+      const voiceId = usingClientVoice
+        ? clientVoiceId.trim()
+        : resolveVoiceId(personaId);
+      console.log(`[TTS:Stream] ElevenLabs voice="${voiceId}" persona="${personaId}" source=${usingClientVoice ? "client" : (customVoiceConfig[personaId] ? "server-custom" : "default")}`);
 
       const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`, {
         method: "POST",
@@ -262,8 +266,19 @@ app.post("/api/tts/stream", async (req, res) => {
 
       if (!response.ok) {
         const errText = await response.text();
-        console.error(`[TTS:Stream] ElevenLabs error ${response.status}:`, errText);
-        // Fallback to non-streaming
+        console.error(`[TTS:Stream] ElevenLabs error ${response.status} voice="${voiceId}" persona="${personaId}":`, errText);
+        // If the user explicitly requested ElevenLabs (e.g. to test a custom voice ID),
+        // surface the error instead of silently falling back to OpenAI — otherwise the
+        // user hears the fallback voice and assumes their custom voice ID had no effect.
+        if (provider === "elevenlabs") {
+          return res.status(response.status).json({
+            error: "ElevenLabs TTS failed",
+            voiceId,
+            personaId,
+            detail: errText.slice(0, 500),
+          });
+        }
+        // Auto mode: fall back to OpenAI
         return ttsOpenAI(text, personaId, 1.0, res);
       }
 
@@ -300,14 +315,14 @@ app.post("/api/tts/stream", async (req, res) => {
 // === TTS Endpoint (multi-provider) ===
 
 app.post("/api/tts", async (req, res) => {
-  const { text, personaId, speed, provider } = req.body;
+  const { text, personaId, voiceId: clientVoiceId, speed, provider } = req.body;
   if (!text) return res.status(400).json({ error: "text required" });
 
   const requested = provider || "auto";
 
   // ElevenLabs (premium) — preferred when explicitly requested or auto with key
   if ((requested === "elevenlabs" || requested === "auto") && process.env.ELEVENLABS_API_KEY) {
-    return ttsElevenLabs(text, personaId, res);
+    return ttsElevenLabs(text, personaId, clientVoiceId, res);
   }
 
   // OpenAI — standard
@@ -344,12 +359,15 @@ async function ttsOpenAI(text: string, personaId: string, speed: number, res: an
   }
 }
 
-async function ttsElevenLabs(text: string, personaId: string, res: any) {
+async function ttsElevenLabs(text: string, personaId: string, clientVoiceId: string | undefined, res: any) {
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) return res.status(503).json({ error: "ElevenLabs not configured" });
 
   try {
-    const voiceId = resolveVoiceId(personaId);
+    // Prefer client-provided voice ID (from user's localStorage config) over server-side lookup
+    const voiceId = (clientVoiceId && typeof clientVoiceId === "string" && clientVoiceId.trim())
+      ? clientVoiceId.trim()
+      : resolveVoiceId(personaId);
     const keyPreview = apiKey.substring(0, 4) + "..." + apiKey.substring(apiKey.length - 4);
     console.log(`[TTS:ElevenLabs] voiceId="${voiceId}" persona="${personaId}" keyPreview="${keyPreview}" keyLength=${apiKey.length}`);
 
@@ -755,6 +773,54 @@ app.get("/api/admin/voice-config", (_req, res) => {
     defaults: ELEVENLABS_VOICES,
     custom: customVoiceConfig,
   });
+});
+
+// Test a voice ID by streaming a short sample phrase from ElevenLabs.
+// Returns the audio directly on success, or JSON error on failure so the
+// client can surface the exact reason (invalid ID, unauthorized, etc.).
+app.post("/api/admin/voice-config/test", async (req, res) => {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: "ElevenLabs not configured" });
+
+  const { voiceId, text } = req.body || {};
+  if (!voiceId || typeof voiceId !== "string") {
+    return res.status(400).json({ error: "voiceId required" });
+  }
+
+  const sample = (typeof text === "string" && text.trim()) || "Hello, this is a voice test.";
+
+  try {
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId.trim()}`, {
+      method: "POST",
+      headers: {
+        "xi-api-key": apiKey,
+        "Content-Type": "application/json",
+        "Accept": "audio/mpeg",
+      },
+      body: JSON.stringify({
+        text: sample,
+        model_id: "eleven_multilingual_v2",
+        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+      }),
+    });
+
+    if (!response.ok) {
+      const detail = await response.text();
+      console.error(`[VoiceConfig:Test] ElevenLabs ${response.status} voice="${voiceId}":`, detail);
+      return res.status(response.status).json({
+        error: "ElevenLabs rejected voice ID",
+        status: response.status,
+        detail: detail.slice(0, 500),
+      });
+    }
+
+    const buf = Buffer.from(await response.arrayBuffer());
+    res.set({ "Content-Type": "audio/mpeg", "Content-Length": buf.length.toString() });
+    res.send(buf);
+  } catch (err: any) {
+    console.error("[VoiceConfig:Test] Error:", err.message);
+    res.status(500).json({ error: "Voice test failed", detail: err.message });
+  }
 });
 
 app.put("/api/admin/voice-config", (req, res) => {
