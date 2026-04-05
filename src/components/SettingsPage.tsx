@@ -14,6 +14,8 @@ import {
   Volume2,
   Save,
   Check,
+  Play,
+  Loader2,
   Tag,
 } from "lucide-react";
 import {
@@ -728,6 +730,7 @@ function VoiceConfigPanel({ showToast }: { showToast: (msg: string) => void }) {
                   defaultVoiceId={ELEVENLABS_DEFAULT_VOICES[persona.id]}
                   customVoiceId={edits[persona.id] || ""}
                   onChange={(v) => updateVoiceId(persona.id, v)}
+                  showToast={showToast}
                 />
               ))}
             </div>
@@ -770,13 +773,61 @@ function VoiceConfigRow({
   defaultVoiceId,
   customVoiceId,
   onChange,
+  showToast,
 }: {
   persona: Persona;
   defaultVoiceId?: string;
   customVoiceId: string;
   onChange: (v: string) => void;
+  showToast: (msg: string) => void;
 }) {
   const hasCustom = !!customVoiceId.trim();
+  const [testing, setTesting] = useState(false);
+
+  const effectiveVoiceId = customVoiceId.trim() || defaultVoiceId || "";
+
+  const handleTest = async () => {
+    if (!effectiveVoiceId) {
+      showToast("No voice ID to test");
+      return;
+    }
+    setTesting(true);
+    try {
+      const res = await fetch("/api/admin/voice-config/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          voiceId: effectiveVoiceId,
+          text: `Hello, I'm ${persona.name}. This is a voice test.`,
+        }),
+      });
+
+      if (!res.ok) {
+        let msg = `Voice test failed (${res.status})`;
+        try {
+          const data = await res.json();
+          if (data?.detail) msg = `ElevenLabs: ${String(data.detail).slice(0, 120)}`;
+          else if (data?.error) msg = data.error;
+        } catch {}
+        showToast(msg);
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.onended = () => URL.revokeObjectURL(url);
+      audio.onerror = () => {
+        URL.revokeObjectURL(url);
+        showToast("Audio playback failed");
+      };
+      await audio.play();
+    } catch (err: any) {
+      showToast(`Test error: ${err?.message || "unknown"}`);
+    } finally {
+      setTesting(false);
+    }
+  };
 
   return (
     <div className="flex items-center gap-3 py-1.5">
@@ -811,6 +862,21 @@ function VoiceConfigRow({
         placeholder={defaultVoiceId || "Rachel (default)"}
         className="flex-1 min-w-0 bg-surface-overlay border border-white/5 rounded-lg px-2.5 py-1.5 text-label text-white/70 placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 font-mono"
       />
+
+      {/* Test button — plays a sample so user can verify the voice ID works */}
+      <button
+        type="button"
+        onClick={handleTest}
+        disabled={testing || !effectiveVoiceId}
+        title="Preview this voice"
+        className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-surface-overlay border border-white/5 text-white/60 hover:text-violet-400 hover:border-violet-500/50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      >
+        {testing ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        ) : (
+          <Play className="w-3.5 h-3.5" />
+        )}
+      </button>
     </div>
   );
 }
