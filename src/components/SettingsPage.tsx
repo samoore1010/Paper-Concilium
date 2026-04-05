@@ -358,7 +358,7 @@ export function SettingsPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 20 }}
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg bg-surface-overlay border border-white/10 text-body text-white/80 shadow-lg z-50"
+          className="fixed bottom-[calc(56px+env(safe-area-inset-bottom,0px)+16px)] md:bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg bg-surface-overlay border border-white/10 text-body text-white/80 shadow-lg z-50"
         >
           {toast}
         </motion.div>
@@ -631,7 +631,7 @@ function CharacterNamesPanel({ showToast }: { showToast: (msg: string) => void }
               </div>
             </div>
           ))}
-          <div className="flex justify-end pt-2">
+          <div className="sticky bottom-0 bg-surface-raised flex justify-end pt-2 pb-1">
             <button
               onClick={handleSave}
               disabled={!hasChanges || saving}
