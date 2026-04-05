@@ -49,6 +49,31 @@ Load order on startup (each layer overrides the previous):
 For local dev, leave `CONFIG_DATA_DIR` unset — writes land in `./data/*.json`
 so you can commit them as new seed values when desired.
 
+### Character Studio (brain management)
+
+Each character has a "brain" = structured `CharacterDefinition` (identity,
+priorities, pet peeves, reaction triggers, disagreement style, opening
+lines, voice) plus a freeform `notes.md` that is appended to the LLM system
+prompt under an "ADDITIONAL INSTRUCTIONS" layer. Brains live on disk using
+the same two-tier pattern as voice/name config:
+
+- **Seed**: `data/characters/{id}/{definition.json,notes.md}` — committed
+  to the repo, generated from the hardcoded baseline in
+  `server/personalityEngine.ts` via `scripts/migrate-characters.ts`.
+- **Live**: `$CONFIG_DATA_DIR/characters/{id}/{definition.json,notes.md}` on
+  the Railway volume. All writes from Settings → Character Studio land here.
+
+Load order at startup: `hardcoded baseline → seed file → live volume file`.
+Per-key merge, so you can override just a few fields in the live overlay and
+inherit everything else from seed.
+
+Admin endpoints: `GET /api/admin/characters`, `GET/PUT
+/api/admin/characters/:id`. The id registry is fixed (21 personas) — the
+filesystem is treated as overlay only, so unknown ids are rejected.
+
+To regenerate seed files from the hardcoded baseline:
+`npx tsx scripts/migrate-characters.ts`
+
 ## Commands
 
 - `npm run dev` — Vite frontend dev server
