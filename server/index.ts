@@ -9,6 +9,8 @@ import multer from "multer";
 import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
 import { getPersonaPrompt, buildReactionPrompt, buildFeedbackPrompt } from "./personaPrompts.js";
+import { getAllCharacterBrains, getCharacterBrain, saveCharacterBrain } from "./personalityEngine.js";
+import type { CharacterDefinition } from "./personalityEngine.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -910,6 +912,56 @@ app.put("/api/admin/character-config", (req, res) => {
   } catch (err: any) {
     console.error("[CharacterConfig] Save error:", err.message);
     res.status(500).json({ error: "Failed to save character config", detail: err.message });
+  }
+});
+
+// === Admin Character Studio (brain management) ===
+//
+// Each character has a "brain" = structured CharacterDefinition + freeform
+// markdown notes. Seed files live at data/characters/{id}/; live overrides
+// land in $CONFIG_DATA_DIR/characters/{id}/ so edits persist across Railway
+// redeploys. See server/personalityEngine.ts for load/save internals.
+
+app.get("/api/admin/characters", (_req, res) => {
+  const brains = getAllCharacterBrains();
+  const list = Object.entries(brains).map(([id, { definition, notes }]) => ({
+    id,
+    definition,
+    notes,
+  }));
+  res.json({ characters: list });
+});
+
+app.get("/api/admin/characters/:id", (req, res) => {
+  const brain = getCharacterBrain(req.params.id);
+  if (!brain) return res.status(404).json({ error: "Unknown character id" });
+  res.json({ id: req.params.id, definition: brain.definition, notes: brain.notes });
+});
+
+app.put("/api/admin/characters/:id", (req, res) => {
+  const id = req.params.id;
+  const existing = getCharacterBrain(id);
+  if (!existing) return res.status(404).json({ error: "Unknown character id" });
+
+  const { definition, notes } = req.body || {};
+  if (!definition || typeof definition !== "object") {
+    return res.status(400).json({ error: "definition object required" });
+  }
+  if (typeof notes !== "string") {
+    return res.status(400).json({ error: "notes string required" });
+  }
+
+  // Preserve id — never let the client rewrite it.
+  const merged: CharacterDefinition = { ...existing.definition, ...definition, id };
+
+  try {
+    saveCharacterBrain(id, merged, notes);
+    console.log(`[CharacterBrain] Saved ${id} (notes: ${notes.length} chars)`);
+    res.json({ saved: true, id });
+  } catch (err) {
+    const e = err as Error;
+    console.error(`[CharacterBrain] Save error for ${id}:`, e.message);
+    res.status(500).json({ error: "Failed to save character brain", detail: e.message });
   }
 });
 

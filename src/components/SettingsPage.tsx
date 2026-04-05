@@ -17,6 +17,8 @@ import {
   Play,
   Loader2,
   Tag,
+  Brain,
+  ChevronRight,
 } from "lucide-react";
 import {
   AppSettings,
@@ -302,6 +304,9 @@ export function SettingsPage() {
 
       {/* Admin Voice Config */}
       <VoiceConfigPanel showToast={showToast} />
+
+      {/* Character Studio — brain editor */}
+      <CharacterStudioPanel showToast={showToast} />
 
       {/* Character Names */}
       <CharacterNamesPanel showToast={showToast} />
@@ -893,5 +898,352 @@ function VoiceConfigRow({
         )}
       </button>
     </div>
+  );
+}
+
+// ============================================================
+// Character Studio — per-character brain editor
+// ============================================================
+//
+// Each character has a brain = structured definition (priorities, pet
+// peeves, disagreement style, reaction triggers, opening lines...) plus a
+// freeform notes.md that gets appended to the LLM system prompt. Edits here
+// write to the $CONFIG_DATA_DIR/characters/{id}/ volume on Railway, so they
+// persist across redeploys without a commit.
+
+interface CharacterBrain {
+  id: string;
+  definition: {
+    id: string;
+    name: string;
+    age: number;
+    gender: string;
+    profession: string;
+    politicalLeaning: string;
+    bio: string;
+    archetype: string;
+    archetypeSource: string;
+    disclaimer: string;
+    priorities: string[];
+    pet_peeves: string[];
+    behavioral: {
+      questioningStyle: string;
+      interruptionPattern: string;
+      reactionTriggers: { leanForward: string[]; checkOut: string[] };
+      disagreementStyle: string;
+      intellectualBlindSpots: string[];
+      rhetoricalTendencies: string[];
+      domainVocabulary: string[];
+      openingPatterns: string[];
+    };
+    voice: { voiceId?: string; speakingPace: string; prosodyDescription: string };
+  };
+  notes: string;
+}
+
+function CharacterStudioPanel({ showToast }: { showToast: (msg: string) => void }) {
+  const [brains, setBrains] = useState<CharacterBrain[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/admin/characters")
+      .then((r) => r.json())
+      .then((data: { characters: CharacterBrain[] }) => setBrains(data.characters || []))
+      .catch(() => showToast("Failed to load character brains"))
+      .finally(() => setLoading(false));
+  }, [showToast]);
+
+  const handleSave = async (id: string, updated: CharacterBrain) => {
+    const res = await fetch(`/api/admin/characters/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ definition: updated.definition, notes: updated.notes }),
+    });
+    if (!res.ok) throw new Error("Save failed");
+    setBrains((prev) => prev.map((b) => (b.id === id ? updated : b)));
+  };
+
+  const grouped = PERSONA_PACKS.map((pack) => ({
+    pack,
+    items: PERSONA_LIBRARY.filter((p) => p.pack === pack.id)
+      .map((p) => brains.find((b) => b.id === p.id))
+      .filter((b): b is CharacterBrain => !!b),
+  }));
+
+  return (
+    <SettingsPanel
+      icon={<Brain className="w-4 h-4" />}
+      title="Character Studio"
+      description="Edit each character's brain — priorities, behaviors, and freeform instructions"
+    >
+      {loading ? (
+        <p className="text-label text-white/40">Loading characters...</p>
+      ) : (
+        <div className="space-y-5">
+          {grouped.map(({ pack, items }) => (
+            <div key={pack.id}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm">{pack.icon}</span>
+                <h3 className="text-label font-medium text-white/60 uppercase tracking-wider">
+                  {PACK_LABELS[pack.id] || pack.name}
+                </h3>
+              </div>
+              <div className="space-y-1.5">
+                {items.map((brain) => {
+                  const persona = PERSONA_LIBRARY.find((p) => p.id === brain.id);
+                  if (!persona) return null;
+                  const isExpanded = expandedId === brain.id;
+                  return (
+                    <div
+                      key={brain.id}
+                      className="rounded-lg border border-white/5 bg-surface-overlay overflow-hidden"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setExpandedId(isExpanded ? null : brain.id)}
+                        className="w-full flex items-center gap-3 px-3 py-2 hover:bg-white/[0.02] transition-colors text-left"
+                      >
+                        <div className="flex-shrink-0 w-8 h-8">
+                          <MiiAvatar persona={persona} size={32} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-body text-white/80 truncate leading-tight">
+                            {brain.definition.name}
+                          </p>
+                          <p className="text-[10px] text-white/35 truncate leading-tight">
+                            {brain.definition.archetype}
+                          </p>
+                        </div>
+                        <ChevronRight
+                          className={`w-4 h-4 text-white/40 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                        />
+                      </button>
+                      {isExpanded && (
+                        <CharacterBrainEditor
+                          brain={brain}
+                          onSave={handleSave}
+                          showToast={showToast}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </SettingsPanel>
+  );
+}
+
+function CharacterBrainEditor({
+  brain,
+  onSave,
+  showToast,
+}: {
+  brain: CharacterBrain;
+  onSave: (id: string, updated: CharacterBrain) => Promise<void>;
+  showToast: (msg: string) => void;
+}) {
+  const [draft, setDraft] = useState<CharacterBrain>(brain);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  // Reset draft when the upstream brain changes (e.g. after a save elsewhere)
+  useEffect(() => { setDraft(brain); }, [brain]);
+
+  const dirty = JSON.stringify(draft) !== JSON.stringify(brain);
+
+  const updateDef = <K extends keyof CharacterBrain["definition"]>(
+    key: K,
+    value: CharacterBrain["definition"][K],
+  ) => {
+    setDraft((d) => ({ ...d, definition: { ...d.definition, [key]: value } }));
+  };
+
+  const updateBehavioral = <K extends keyof CharacterBrain["definition"]["behavioral"]>(
+    key: K,
+    value: CharacterBrain["definition"]["behavioral"][K],
+  ) => {
+    setDraft((d) => ({
+      ...d,
+      definition: {
+        ...d.definition,
+        behavioral: { ...d.definition.behavioral, [key]: value },
+      },
+    }));
+  };
+
+  const updateTriggers = (key: "leanForward" | "checkOut", value: string[]) => {
+    setDraft((d) => ({
+      ...d,
+      definition: {
+        ...d.definition,
+        behavioral: {
+          ...d.definition.behavioral,
+          reactionTriggers: { ...d.definition.behavioral.reactionTriggers, [key]: value },
+        },
+      },
+    }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await onSave(brain.id, draft);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      showToast(`${draft.definition.name} brain saved`);
+    } catch {
+      showToast("Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="border-t border-white/5 p-3 space-y-3">
+      <BrainField label="Display name">
+        <input
+          type="text"
+          value={draft.definition.name}
+          onChange={(e) => updateDef("name", e.target.value)}
+          className={brainInputClass}
+        />
+      </BrainField>
+
+      <BrainField label="Archetype">
+        <input
+          type="text"
+          value={draft.definition.archetype}
+          onChange={(e) => updateDef("archetype", e.target.value)}
+          className={brainInputClass}
+        />
+      </BrainField>
+
+      <BrainField label="Bio">
+        <textarea
+          value={draft.definition.bio}
+          onChange={(e) => updateDef("bio", e.target.value)}
+          rows={2}
+          className={brainInputClass}
+        />
+      </BrainField>
+
+      <BrainField label="Priorities (one per line)">
+        <ListEditor
+          items={draft.definition.priorities}
+          onChange={(v) => updateDef("priorities", v)}
+        />
+      </BrainField>
+
+      <BrainField label="Pet peeves (one per line)">
+        <ListEditor
+          items={draft.definition.pet_peeves}
+          onChange={(v) => updateDef("pet_peeves", v)}
+        />
+      </BrainField>
+
+      <BrainField label="Lean forward when... (one per line)">
+        <ListEditor
+          items={draft.definition.behavioral.reactionTriggers.leanForward}
+          onChange={(v) => updateTriggers("leanForward", v)}
+        />
+      </BrainField>
+
+      <BrainField label="Check out when... (one per line)">
+        <ListEditor
+          items={draft.definition.behavioral.reactionTriggers.checkOut}
+          onChange={(v) => updateTriggers("checkOut", v)}
+        />
+      </BrainField>
+
+      <BrainField label="Disagreement style">
+        <textarea
+          value={draft.definition.behavioral.disagreementStyle}
+          onChange={(e) => updateBehavioral("disagreementStyle", e.target.value)}
+          rows={2}
+          className={brainInputClass}
+        />
+      </BrainField>
+
+      <BrainField label="Rhetorical tendencies (one per line)">
+        <ListEditor
+          items={draft.definition.behavioral.rhetoricalTendencies}
+          onChange={(v) => updateBehavioral("rhetoricalTendencies", v)}
+        />
+      </BrainField>
+
+      <BrainField label="Opening lines (one per line)">
+        <ListEditor
+          items={draft.definition.behavioral.openingPatterns}
+          onChange={(v) => updateBehavioral("openingPatterns", v)}
+        />
+      </BrainField>
+
+      <BrainField label="Freeform notes (Markdown — appended to system prompt)">
+        <textarea
+          value={draft.notes}
+          onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
+          rows={6}
+          placeholder="Extra instructions, context, mood, custom rules..."
+          className={`${brainInputClass} font-mono text-xs`}
+        />
+      </BrainField>
+
+      <div className="flex justify-end pt-1">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={!dirty || saving}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-label font-medium transition-colors ${
+            saved
+              ? "bg-green-500/20 text-green-400"
+              : dirty
+                ? "bg-violet-500/20 text-violet-400 hover:bg-violet-500/30"
+                : "bg-white/5 text-white/30 cursor-not-allowed"
+          }`}
+        >
+          {saved ? (
+            <><Check className="w-3.5 h-3.5" />Saved</>
+          ) : (
+            <><Save className="w-3.5 h-3.5" />{saving ? "Saving..." : "Save Brain"}</>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const brainInputClass =
+  "w-full bg-surface-raised border border-white/5 rounded-lg px-2.5 py-1.5 text-label text-white/80 placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 resize-y";
+
+function BrainField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-[10px] uppercase tracking-wider text-white/40 mb-1">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function ListEditor({ items, onChange }: { items: string[]; onChange: (v: string[]) => void }) {
+  // Edit as newline-separated text. Splitting happens on blur so the user can
+  // type blank lines without them collapsing mid-keystroke.
+  const [text, setText] = useState(items.join("\n"));
+  useEffect(() => { setText(items.join("\n")); }, [items]);
+
+  return (
+    <textarea
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => onChange(text.split("\n").map((s) => s.trim()).filter(Boolean))}
+      rows={Math.max(2, Math.min(6, items.length + 1))}
+      className={brainInputClass}
+    />
   );
 }

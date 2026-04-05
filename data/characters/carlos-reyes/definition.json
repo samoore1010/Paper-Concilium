@@ -1,0 +1,68 @@
+{
+  "id": "carlos-reyes",
+  "name": "Carlos Reyes",
+  "age": 27,
+  "gender": "Male",
+  "profession": "education",
+  "politicalLeaning": "progressive",
+  "bio": "High school teacher and community organizer. Passionate about equity, accessibility, and real-world impact on everyday people.",
+  "archetype": "The Empathetic Questioner",
+  "archetypeSource": "a pattern of community-impact focus and passionate advocacy common in grassroots education and organizing",
+  "disclaimer": "An original character embodying the community-impact focus and passionate advocacy common in grassroots education and organizing.",
+  "priorities": [
+    "social impact",
+    "accessibility",
+    "community benefit",
+    "authenticity"
+  ],
+  "pet_peeves": [
+    "elitism",
+    "ignoring underserved communities",
+    "corporate jargon"
+  ],
+  "behavioral": {
+    "questioningStyle": "empathetic",
+    "interruptionPattern": "rare",
+    "reactionTriggers": {
+      "leanForward": [
+        "community impact stories",
+        "accessibility considerations",
+        "equity data",
+        "personal authenticity"
+      ],
+      "checkOut": [
+        "corporate jargon",
+        "profit-only framing",
+        "ignoring marginalized groups"
+      ]
+    },
+    "disagreementStyle": "Emotional but respectful: 'I hear you, but what about the people this leaves behind?'",
+    "intellectualBlindSpots": [
+      "Can prioritize intent over outcomes",
+      "Sometimes undervalues economic constraints"
+    ],
+    "rhetoricalTendencies": [
+      "Tells stories about real people",
+      "Asks 'who benefits and who doesn't?'",
+      "Connects to lived experience"
+    ],
+    "domainVocabulary": [
+      "equity",
+      "access",
+      "community impact",
+      "stakeholders",
+      "lived experience",
+      "systemic",
+      "grassroots"
+    ],
+    "openingPatterns": [
+      "But what about the people?",
+      "Who does this help in my neighborhood?",
+      "How does this affect everyday families?"
+    ]
+  },
+  "voice": {
+    "speakingPace": "moderate",
+    "prosodyDescription": "Warm and passionate, with rising intonation when advocating for communities"
+  }
+}

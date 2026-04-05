@@ -6,10 +6,18 @@
  *   2. Behavioral Layer — HOW they communicate (questioning style, interruption patterns, triggers)
  *   3. Domain Knowledge Layer — session-type-specific context and vocabulary
  *   4. Voice Identity Layer — speaking pace and prosody (used by TTS, referenced in prompts)
+ *   5. Additional Instructions Layer — freeform per-character notes loaded from notes.md
  *
- * All character-engine types and behavioral data live server-side. The frontend
- * Persona type stays thin (UI-only fields). This module owns the LLM personality layer.
+ * Character definitions are loaded at startup from `data/characters/{id}/`
+ * (seed, committed) with an overlay from `$CONFIG_DATA_DIR/characters/{id}/`
+ * (live, Railway volume). The hardcoded CHARACTER_DEFINITIONS below is the
+ * ultimate fallback and the baseline used by scripts/migrate-characters.ts
+ * when generating fresh seed files.
  */
+
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
 // ──────────────────────────────────────────────
 // Engine Types (server-only)
@@ -788,6 +796,109 @@ function describeInterruptionPattern(pattern: string): string {
 }
 
 // ──────────────────────────────────────────────
+// Brain File Loading (seed + live overlay)
+// ──────────────────────────────────────────────
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const SEED_CHARS_DIR = path.resolve(__dirname, "../data/characters");
+const LIVE_CHARS_DIR = path.resolve(process.env.CONFIG_DATA_DIR || path.resolve(__dirname, "../data"), "characters");
+const LIVE_IS_SEPARATE = LIVE_CHARS_DIR !== SEED_CHARS_DIR;
+
+// In-memory cache populated at startup and refreshed on admin writes.
+const characterBrains: Record<string, { definition: CharacterDefinition; notes: string }> = {};
+
+function readDefinitionFile(filePath: string): Partial<CharacterDefinition> | null {
+  try {
+    const raw = fs.readFileSync(filePath, "utf-8");
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Partial<CharacterDefinition>;
+    }
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException;
+    if (e.code !== "ENOENT") {
+      console.error(`[CharacterBrain] Failed to read ${filePath}:`, e.message);
+    }
+  }
+  return null;
+}
+
+function readNotesFile(filePath: string): string | null {
+  try {
+    return fs.readFileSync(filePath, "utf-8");
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException;
+    if (e.code !== "ENOENT") {
+      console.error(`[CharacterBrain] Failed to read ${filePath}:`, e.message);
+    }
+    return null;
+  }
+}
+
+function loadBrain(id: string): { definition: CharacterDefinition; notes: string } {
+  const baseline = CHARACTER_DEFINITIONS[id];
+  let definition: CharacterDefinition = baseline ? { ...baseline } : ({ id } as CharacterDefinition);
+
+  const seedDef = readDefinitionFile(path.join(SEED_CHARS_DIR, id, "definition.json"));
+  if (seedDef) definition = { ...definition, ...seedDef } as CharacterDefinition;
+
+  if (LIVE_IS_SEPARATE) {
+    const liveDef = readDefinitionFile(path.join(LIVE_CHARS_DIR, id, "definition.json"));
+    if (liveDef) definition = { ...definition, ...liveDef } as CharacterDefinition;
+  }
+
+  let notes = readNotesFile(path.join(SEED_CHARS_DIR, id, "notes.md")) ?? "";
+  if (LIVE_IS_SEPARATE) {
+    const liveNotes = readNotesFile(path.join(LIVE_CHARS_DIR, id, "notes.md"));
+    if (liveNotes !== null) notes = liveNotes;
+  }
+
+  return { definition, notes };
+}
+
+function loadAllBrains(): void {
+  // The id registry comes from the hardcoded baseline. Files are treated as
+  // overlays — we do not discover new ids from the filesystem.
+  for (const id of Object.keys(CHARACTER_DEFINITIONS)) {
+    characterBrains[id] = loadBrain(id);
+  }
+  console.log(`[CharacterBrain] Loaded ${Object.keys(characterBrains).length} brain(s) from seed=${SEED_CHARS_DIR}${LIVE_IS_SEPARATE ? ` live=${LIVE_CHARS_DIR}` : ""}`);
+}
+
+loadAllBrains();
+
+export function reloadCharacterBrain(id: string): void {
+  if (CHARACTER_DEFINITIONS[id]) {
+    characterBrains[id] = loadBrain(id);
+  }
+}
+
+export function getCharacterBrain(id: string): { definition: CharacterDefinition; notes: string } | undefined {
+  return characterBrains[id];
+}
+
+export function getAllCharacterBrains(): Record<string, { definition: CharacterDefinition; notes: string }> {
+  return characterBrains;
+}
+
+export function saveCharacterBrain(id: string, definition: CharacterDefinition, notes: string): void {
+  if (!CHARACTER_DEFINITIONS[id]) {
+    throw new Error(`Unknown character id: ${id}`);
+  }
+  const dir = path.join(LIVE_CHARS_DIR, id);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "definition.json"), JSON.stringify(definition, null, 2) + "\n", "utf-8");
+  fs.writeFileSync(path.join(dir, "notes.md"), notes, "utf-8");
+  characterBrains[id] = { definition, notes };
+}
+
+// Used by scripts/migrate-characters.ts to dump hardcoded baseline to disk.
+export function getAllCharacterDefinitionsForMigration(): Record<string, CharacterDefinition> {
+  return CHARACTER_DEFINITIONS;
+}
+
+// ──────────────────────────────────────────────
 // Public API
 // ──────────────────────────────────────────────
 
@@ -798,10 +909,18 @@ export interface ComposedPersonaPrompt {
 }
 
 export function getCharacterDefinition(personaId: string): CharacterDefinition | undefined {
-  return CHARACTER_DEFINITIONS[personaId];
+  return characterBrains[personaId]?.definition ?? CHARACTER_DEFINITIONS[personaId];
 }
 
-export function composeSystemPrompt(character: CharacterDefinition, sessionType: string): string {
+function composeAdditionalInstructionsLayer(notes: string): string {
+  // Strip the HTML comment hint block the migration seeds with so it never
+  // leaks into prompts if the user leaves notes empty.
+  const stripped = notes.replace(/<!--[\s\S]*?-->/g, "").trim();
+  if (!stripped) return "";
+  return `ADDITIONAL INSTRUCTIONS (character-specific):\n${stripped}`;
+}
+
+export function composeSystemPrompt(character: CharacterDefinition, sessionType: string, notes = ""): string {
   const domain = getDomainKnowledge(sessionType, character.profession);
 
   const layers = [
@@ -810,6 +929,7 @@ export function composeSystemPrompt(character: CharacterDefinition, sessionType:
     composePrioritiesLayer(character),
     composeDomainLayer(domain),
     composeVoiceLayer(character.voice),
+    composeAdditionalInstructionsLayer(notes),
   ];
 
   return layers.filter(Boolean).join("\n\n");
@@ -856,11 +976,12 @@ Be honest, specific, and stay fully in character. Reference actual quotes or poi
 }
 
 export function composePersonaPrompt(personaId: string, sessionType: string, nameOverride?: string): ComposedPersonaPrompt | null {
-  const character = CHARACTER_DEFINITIONS[personaId];
+  const brain = characterBrains[personaId];
+  const character = brain?.definition ?? CHARACTER_DEFINITIONS[personaId];
   if (!character) return null;
   const c = nameOverride ? { ...character, name: nameOverride } : character;
   return {
-    systemPrompt: composeSystemPrompt(c, sessionType),
+    systemPrompt: composeSystemPrompt(c, sessionType, brain?.notes ?? ""),
     reactionInstruction: composeReactionInstruction(c),
     feedbackInstruction: composeFeedbackInstruction(c),
   };

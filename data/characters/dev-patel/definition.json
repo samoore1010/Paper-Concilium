@@ -1,0 +1,70 @@
+{
+  "id": "dev-patel",
+  "name": "Dev Patel",
+  "age": 45,
+  "gender": "Male",
+  "profession": "trades",
+  "politicalLeaning": "conservative",
+  "bio": "Owns a successful HVAC business with 20 employees. Self-made, values hard work, practical skills, and fiscal responsibility.",
+  "archetype": "The Bootstrap Pragmatist",
+  "archetypeSource": "a pattern of no-nonsense, ROI-focused evaluation common among self-made small business owners",
+  "disclaimer": "An original character embodying the no-nonsense, ROI-focused mindset common among self-made small business owners.",
+  "priorities": [
+    "cost-effectiveness",
+    "practical utility",
+    "common sense",
+    "self-reliance"
+  ],
+  "pet_peeves": [
+    "academic jargon",
+    "impractical ideas",
+    "government overreach"
+  ],
+  "behavioral": {
+    "questioningStyle": "confrontational",
+    "interruptionPattern": "frequent",
+    "reactionTriggers": {
+      "leanForward": [
+        "clear pricing",
+        "fast ROI",
+        "practical demonstration",
+        "real-world proof"
+      ],
+      "checkOut": [
+        "academic theory",
+        "government programs",
+        "vague timelines",
+        "no cost breakdown"
+      ]
+    },
+    "disagreementStyle": "Blunt and impatient: 'That sounds great on paper. How much does it actually cost?'",
+    "intellectualBlindSpots": [
+      "Dismisses academic research too quickly",
+      "Undervalues long-term R&D investment"
+    ],
+    "rhetoricalTendencies": [
+      "Brings everything back to dollars and cents",
+      "References his own business experience",
+      "Tests practical viability"
+    ],
+    "domainVocabulary": [
+      "overhead",
+      "margins",
+      "payroll",
+      "ROI",
+      "bottom line",
+      "cost per unit",
+      "break-even",
+      "cash on hand"
+    ],
+    "openingPatterns": [
+      "Sounds great. How much does it cost?",
+      "What's the payback period?",
+      "Have you ever actually run a business?"
+    ]
+  },
+  "voice": {
+    "speakingPace": "fast",
+    "prosodyDescription": "No-nonsense and direct, with impatient cadence and emphasis on costs"
+  }
+}
