@@ -9,7 +9,13 @@ import multer from "multer";
 import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
 import { getPersonaPrompt, buildReactionPrompt, buildFeedbackPrompt } from "./personaPrompts.js";
-import { getAllCharacterBrains, getCharacterBrain, saveCharacterBrain } from "./personalityEngine.js";
+import {
+  getAllCharacterBrains,
+  getCharacterBrain,
+  saveCharacterBrain,
+  addCharacterKnowledge,
+  removeCharacterKnowledge,
+} from "./personalityEngine.js";
 import type { CharacterDefinition } from "./personalityEngine.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -962,6 +968,61 @@ app.put("/api/admin/characters/:id", (req, res) => {
     const e = err as Error;
     console.error(`[CharacterBrain] Save error for ${id}:`, e.message);
     res.status(500).json({ error: "Failed to save character brain", detail: e.message });
+  }
+});
+
+// Upload reference documents for a character. Files are extracted to text
+// (PDF/DOCX/PPTX/TXT/MD all supported via the shared extract pipeline) and
+// stored as .txt under $CONFIG_DATA_DIR/characters/{id}/knowledge/. The
+// extracted text is then injected into the character's system prompt under
+// the "CHARACTER KNOWLEDGE" layer at reaction time.
+app.post("/api/admin/characters/:id/knowledge", upload.array("files", 5), async (req, res) => {
+  const id = req.params.id as string;
+  const existing = getCharacterBrain(id);
+  if (!existing) return res.status(404).json({ error: "Unknown character id" });
+
+  const files = req.files as Express.Multer.File[];
+  if (!files || files.length === 0) {
+    return res.status(400).json({ error: "No files provided" });
+  }
+
+  const added: unknown[] = [];
+  const errors: { filename: string; error: string }[] = [];
+
+  for (const file of files) {
+    try {
+      const extracted = await extractFileContent(file);
+      if (!extracted.text.trim()) {
+        errors.push({ filename: file.originalname, error: "Empty extraction" });
+        continue;
+      }
+      const entry = addCharacterKnowledge(id, file.originalname, extracted.text);
+      added.push(entry);
+    } catch (err) {
+      const e = err as Error;
+      errors.push({ filename: file.originalname, error: e.message });
+    }
+  }
+
+  console.log(`[CharacterBrain] ${id}: added ${added.length} knowledge file(s), ${errors.length} error(s)`);
+  res.json({ added, errors, knowledge: getCharacterBrain(id)?.knowledge ?? [] });
+});
+
+app.delete("/api/admin/characters/:id/knowledge/:filename", (req, res) => {
+  const id = req.params.id as string;
+  const filename = req.params.filename as string;
+  const existing = getCharacterBrain(id);
+  if (!existing) return res.status(404).json({ error: "Unknown character id" });
+
+  try {
+    const ok = removeCharacterKnowledge(id, filename);
+    if (!ok) return res.status(400).json({ error: "Invalid filename" });
+    console.log(`[CharacterBrain] ${id}: removed knowledge file ${filename}`);
+    res.json({ removed: true, knowledge: getCharacterBrain(id)?.knowledge ?? [] });
+  } catch (err) {
+    const e = err as Error;
+    console.error(`[CharacterBrain] Remove error for ${id}/${filename}:`, e.message);
+    res.status(500).json({ error: "Failed to remove knowledge file", detail: e.message });
   }
 });
 

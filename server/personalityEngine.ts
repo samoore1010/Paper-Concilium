@@ -805,8 +805,24 @@ const SEED_CHARS_DIR = path.resolve(__dirname, "../data/characters");
 const LIVE_CHARS_DIR = path.resolve(process.env.CONFIG_DATA_DIR || path.resolve(__dirname, "../data"), "characters");
 const LIVE_IS_SEPARATE = LIVE_CHARS_DIR !== SEED_CHARS_DIR;
 
+export interface KnowledgeFile {
+  filename: string;       // stored filename (sanitized, .txt)
+  originalName: string;   // original uploaded filename
+  byteSize: number;       // size of extracted text
+  addedAt: string;        // ISO timestamp
+}
+
+export interface CharacterBrain {
+  definition: CharacterDefinition;
+  notes: string;
+  knowledge: KnowledgeFile[];
+}
+
 // In-memory cache populated at startup and refreshed on admin writes.
-const characterBrains: Record<string, { definition: CharacterDefinition; notes: string }> = {};
+// Knowledge file *contents* are not cached — only the metadata list. When
+// composing a prompt we read files lazily so heavy documents don't live in
+// RAM for every persona that isn't currently speaking.
+const characterBrains: Record<string, CharacterBrain> = {};
 
 function readDefinitionFile(filePath: string): Partial<CharacterDefinition> | null {
   try {
@@ -836,7 +852,49 @@ function readNotesFile(filePath: string): string | null {
   }
 }
 
-function loadBrain(id: string): { definition: CharacterDefinition; notes: string } {
+// Knowledge files land in the live dir only. When CONFIG_DATA_DIR is unset
+// (local dev) LIVE_DIR === SEED_DIR so uploads still end up committable.
+function knowledgeDirFor(id: string): string {
+  return path.join(LIVE_CHARS_DIR, id, "knowledge");
+}
+
+const KNOWLEDGE_INDEX_FILENAME = "index.json";
+const KNOWLEDGE_BUDGET_CHARS = 4000; // prompt budget per persona across all files
+
+function readKnowledgeIndex(id: string): KnowledgeFile[] {
+  const indexPath = path.join(knowledgeDirFor(id), KNOWLEDGE_INDEX_FILENAME);
+  try {
+    const raw = fs.readFileSync(indexPath, "utf-8");
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed as KnowledgeFile[];
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException;
+    if (e.code !== "ENOENT") {
+      console.error(`[CharacterBrain] Failed to read knowledge index for ${id}:`, e.message);
+    }
+  }
+  return [];
+}
+
+function writeKnowledgeIndex(id: string, files: KnowledgeFile[]): void {
+  const dir = knowledgeDirFor(id);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, KNOWLEDGE_INDEX_FILENAME), JSON.stringify(files, null, 2), "utf-8");
+}
+
+function readKnowledgeText(id: string, filename: string): string {
+  // Defense in depth: only allow plain filenames (no path traversal).
+  if (filename.includes("/") || filename.includes("..") || filename === KNOWLEDGE_INDEX_FILENAME) {
+    return "";
+  }
+  try {
+    return fs.readFileSync(path.join(knowledgeDirFor(id), filename), "utf-8");
+  } catch {
+    return "";
+  }
+}
+
+function loadBrain(id: string): CharacterBrain {
   const baseline = CHARACTER_DEFINITIONS[id];
   let definition: CharacterDefinition = baseline ? { ...baseline } : ({ id } as CharacterDefinition);
 
@@ -854,7 +912,9 @@ function loadBrain(id: string): { definition: CharacterDefinition; notes: string
     if (liveNotes !== null) notes = liveNotes;
   }
 
-  return { definition, notes };
+  const knowledge = readKnowledgeIndex(id);
+
+  return { definition, notes, knowledge };
 }
 
 function loadAllBrains(): void {
@@ -874,11 +934,11 @@ export function reloadCharacterBrain(id: string): void {
   }
 }
 
-export function getCharacterBrain(id: string): { definition: CharacterDefinition; notes: string } | undefined {
+export function getCharacterBrain(id: string): CharacterBrain | undefined {
   return characterBrains[id];
 }
 
-export function getAllCharacterBrains(): Record<string, { definition: CharacterDefinition; notes: string }> {
+export function getAllCharacterBrains(): Record<string, CharacterBrain> {
   return characterBrains;
 }
 
@@ -890,7 +950,71 @@ export function saveCharacterBrain(id: string, definition: CharacterDefinition, 
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "definition.json"), JSON.stringify(definition, null, 2) + "\n", "utf-8");
   fs.writeFileSync(path.join(dir, "notes.md"), notes, "utf-8");
-  characterBrains[id] = { definition, notes };
+  const existing = characterBrains[id];
+  characterBrains[id] = { definition, notes, knowledge: existing?.knowledge ?? [] };
+}
+
+// ──────────────────────────────────────────────
+// Knowledge file management
+// ──────────────────────────────────────────────
+
+function sanitizeKnowledgeFilename(originalName: string): string {
+  // Strip directory components, keep only basename, replace non-safe chars.
+  const base = path.basename(originalName).replace(/\.[^.]+$/, "");
+  const cleaned = base.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 60) || "file";
+  return `${cleaned}-${Date.now()}.txt`;
+}
+
+export function addCharacterKnowledge(id: string, originalName: string, text: string): KnowledgeFile {
+  if (!CHARACTER_DEFINITIONS[id]) {
+    throw new Error(`Unknown character id: ${id}`);
+  }
+  const dir = knowledgeDirFor(id);
+  fs.mkdirSync(dir, { recursive: true });
+
+  const filename = sanitizeKnowledgeFilename(originalName);
+  fs.writeFileSync(path.join(dir, filename), text, "utf-8");
+
+  const entry: KnowledgeFile = {
+    filename,
+    originalName,
+    byteSize: Buffer.byteLength(text, "utf-8"),
+    addedAt: new Date().toISOString(),
+  };
+
+  const index = readKnowledgeIndex(id);
+  index.push(entry);
+  writeKnowledgeIndex(id, index);
+
+  const brain = characterBrains[id];
+  if (brain) brain.knowledge = index;
+
+  return entry;
+}
+
+export function removeCharacterKnowledge(id: string, filename: string): boolean {
+  if (!CHARACTER_DEFINITIONS[id]) {
+    throw new Error(`Unknown character id: ${id}`);
+  }
+  if (filename.includes("/") || filename.includes("..") || filename === KNOWLEDGE_INDEX_FILENAME) {
+    return false;
+  }
+  const dir = knowledgeDirFor(id);
+  const filePath = path.join(dir, filename);
+  try {
+    fs.unlinkSync(filePath);
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException;
+    if (e.code !== "ENOENT") throw err;
+  }
+
+  const index = readKnowledgeIndex(id).filter((k) => k.filename !== filename);
+  writeKnowledgeIndex(id, index);
+
+  const brain = characterBrains[id];
+  if (brain) brain.knowledge = index;
+
+  return true;
 }
 
 // Used by scripts/migrate-characters.ts to dump hardcoded baseline to disk.
@@ -920,7 +1044,31 @@ function composeAdditionalInstructionsLayer(notes: string): string {
   return `ADDITIONAL INSTRUCTIONS (character-specific):\n${stripped}`;
 }
 
-export function composeSystemPrompt(character: CharacterDefinition, sessionType: string, notes = ""): string {
+function composeKnowledgeLayer(id: string, knowledge: KnowledgeFile[]): string {
+  if (!knowledge || knowledge.length === 0) return "";
+
+  const sections: string[] = [];
+  let budgetLeft = KNOWLEDGE_BUDGET_CHARS;
+  for (const entry of knowledge) {
+    if (budgetLeft <= 200) break;
+    const text = readKnowledgeText(id, entry.filename);
+    if (!text) continue;
+    const slice = text.slice(0, budgetLeft - 80);
+    const truncated = text.length > slice.length ? "\n[...truncated]" : "";
+    sections.push(`--- ${entry.originalName} ---\n${slice}${truncated}`);
+    budgetLeft -= slice.length + entry.originalName.length + 20;
+  }
+
+  if (sections.length === 0) return "";
+  return `CHARACTER KNOWLEDGE (reference material this character has studied — weave naturally into your responses when relevant):\n${sections.join("\n\n")}`;
+}
+
+export function composeSystemPrompt(
+  character: CharacterDefinition,
+  sessionType: string,
+  notes = "",
+  knowledge: KnowledgeFile[] = [],
+): string {
   const domain = getDomainKnowledge(sessionType, character.profession);
 
   const layers = [
@@ -930,6 +1078,7 @@ export function composeSystemPrompt(character: CharacterDefinition, sessionType:
     composeDomainLayer(domain),
     composeVoiceLayer(character.voice),
     composeAdditionalInstructionsLayer(notes),
+    composeKnowledgeLayer(character.id, knowledge),
   ];
 
   return layers.filter(Boolean).join("\n\n");
@@ -981,7 +1130,7 @@ export function composePersonaPrompt(personaId: string, sessionType: string, nam
   if (!character) return null;
   const c = nameOverride ? { ...character, name: nameOverride } : character;
   return {
-    systemPrompt: composeSystemPrompt(c, sessionType, brain?.notes ?? ""),
+    systemPrompt: composeSystemPrompt(c, sessionType, brain?.notes ?? "", brain?.knowledge ?? []),
     reactionInstruction: composeReactionInstruction(c),
     feedbackInstruction: composeFeedbackInstruction(c),
   };
