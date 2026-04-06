@@ -79,10 +79,6 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
     setDiagnostics((prev) => [...prev.slice(-99), { ...entry, id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, timestamp: Date.now() }]);
   }, []);
 
-  // Unified time reference — set once when Go Live is pressed.
-  // All subsystems (prosody, STT, recorder, chat) use this as time zero.
-  const liveStartTimeRef = useRef(0);
-
   const [showTeleprompter, setShowTeleprompter] = useState(!!scriptConfig?.text);
   const [continuousActive, setContinuousActive] = useState(false);
   const wordCountRef = useRef(0);
@@ -282,9 +278,6 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
 
   const startContinuousMode = useCallback(async () => {
     setContinuousActive(true);
-    const goLiveTime = Date.now();
-    liveStartTimeRef.current = goLiveTime;
-
     // IMPORTANT: Start ElevenLabs STT FIRST — it opens its own mic stream and
     // AudioWorklet pipeline. Opening other mic streams before it can interfere.
     await startListening();
@@ -308,8 +301,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
     if (videoElRef.current) {
       try { await visualAnalysis.start(videoElRef.current); } catch (e) { console.log("[Continuous] Visual analysis unavailable"); }
     }
-    const setupMs = Date.now() - goLiveTime;
-    console.log(`[Continuous] Started (setup took ${setupMs}ms)`);
+    console.log("[Continuous] Started");
   }, [startListening, startProsody, startVAD, startRecording, visualAnalysis]);
 
   const stopContinuousMode = useCallback(() => {
@@ -459,20 +451,10 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
     }
   }, [interimTranscript, continuousActive]);
 
-  // Elapsed timer starts when Go Live is pressed (via startContinuousMode), not on mount
   useEffect(() => {
-    if (continuousActive && !timerRef.current) {
-      liveStartTimeRef.current = Date.now();
-      timerRef.current = setInterval(() => {
-        setElapsed(Math.floor((Date.now() - liveStartTimeRef.current) / 1000));
-      }, 1000);
-    }
-    if (!continuousActive && timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = undefined;
-    }
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [continuousActive]);
+    timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => clearInterval(timerRef.current);
+  }, []);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -867,58 +849,15 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
       transcript: ft,
     });
     // Collect recording data (use awaited result, not getRecording)
-    const rawTimeline = getTimeline();
+    const timeline = getTimeline();
     const sessionDuration = recordingResult.duration || elapsed;
-
-    // Rebase all timestamps to use recording start as time zero.
-    // Each hook started at a different wall-clock time:
-    //   STT started first (startListening), then prosody, then recording (last).
-    // Recording audio time=0 corresponds to getRecordingStartTime().
-    // Prosody frame.time=X means X seconds after getProsodyStartTime().
-    // STT word.start=X means X seconds after elSTT.getStartTime().
-    // We need to convert everything to: seconds since recording started.
-    const recStart = getRecordingStartTime();
-    const prosodyStart = getProsodyStartTime();
-    const sttStart = elSTT.getStartTime();
-
-    // prosodyOffset: how many seconds prosody started BEFORE recording
-    // If prosody started 200ms before recording, prosodyOffset = -0.2
-    // So a prosody frame at t=5.0 corresponds to recording time 5.0 - 0.2 = 4.8
-    const prosodyOffsetSec = (prosodyStart - recStart) / 1000;
-    // sttOffset: how many seconds STT started BEFORE recording
-    const sttOffsetSec = (sttStart - recStart) / 1000;
-    // elapsed/chat messages use liveStartTimeRef as their zero
-    const elapsedOffsetSec = (liveStartTimeRef.current - recStart) / 1000;
-
-    console.log(`[Timing] recStart=${recStart}, prosodyStart=${prosodyStart} (${prosodyOffsetSec.toFixed(2)}s before rec), sttStart=${sttStart} (${sttOffsetSec.toFixed(2)}s before rec), liveStart=${liveStartTimeRef.current} (${elapsedOffsetSec.toFixed(2)}s before rec)`);
-
-    // Rebase timeline: convert from prosody-relative to recording-relative
-    const timeline = rawTimeline.map((f) => ({
-      ...f,
-      time: Math.max(0, f.time + prosodyOffsetSec),
-    }));
-
-    // Rebase word timestamps: convert from STT-relative to recording-relative
-    const rebasedWordTimestamps = elSTT.wordTimestamps.length > 0
-      ? elSTT.wordTimestamps.map((w) => ({
-          ...w,
-          start: Math.max(0, w.start + sttOffsetSec),
-          end: Math.max(0, w.end + sttOffsetSec),
-        }))
-      : undefined;
-
-    // Rebase chat messages: they use elapsed seconds from liveStartTimeRef
-    const rebasedChatMessages = chatMessages.map((m) => ({
-      ...m,
-      time: Math.max(0, m.time + elapsedOffsetSec),
-    }));
 
     const recordingData: SessionRecordingData | undefined = recordingResult.url ? {
       audioUrl: recordingResult.url,
       duration: sessionDuration,
       timeline,
-      chatMessages: rebasedChatMessages,
-      wordTimestamps: rebasedWordTimestamps,
+      chatMessages: [...chatMessages],
+      wordTimestamps: elSTT.wordTimestamps.length > 0 ? [...elSTT.wordTimestamps] : undefined,
     } : undefined;
 
     onEndSession(feedback, ft, recordingData);
