@@ -11,12 +11,10 @@ import {
   Trash2,
   Download,
   ChevronDown,
-  Volume2,
   Save,
   Check,
   Play,
   Loader2,
-  Tag,
   Brain,
   ChevronRight,
   Upload,
@@ -30,9 +28,8 @@ import {
   resetSettings,
 } from "../data/appSettings";
 import { getSessionHistory, clearHistory } from "../data/sessionHistory";
-import { PERSONA_LIBRARY, PERSONA_PACKS, Persona } from "../data/personas";
+import { PERSONA_LIBRARY, PERSONA_PACKS } from "../data/personas";
 import { ELEVENLABS_DEFAULT_VOICES } from "../data/voiceConfig";
-import { useServerConfig } from "../hooks/useServerConfig";
 import { MiiAvatar } from "./MiiAvatar";
 
 // ============================================================
@@ -306,14 +303,8 @@ export function SettingsPage() {
         </div>
       </SettingsPanel>
 
-      {/* Admin Voice Config */}
-      <VoiceConfigPanel showToast={showToast} />
-
-      {/* Character Studio — brain editor */}
+      {/* Character Studio — brain, voice, and name editor */}
       <CharacterStudioPanel showToast={showToast} />
-
-      {/* Character Names */}
-      <CharacterNamesPanel showToast={showToast} />
 
       {/* About */}
       <SettingsPanel
@@ -538,317 +529,8 @@ const PACK_LABELS: Record<string, string> = {
   "business-tank": "The Tank",
 };
 
-function CharacterNamesPanel({ showToast }: { showToast: (msg: string) => void }) {
-  const { edits, setEdits, loading, saving, saved, dirty, save } = useServerConfig<Record<string, string>>({
-    getUrl: "/api/admin/character-config",
-    putUrl: "/api/admin/character-config",
-    extract: (data) => (data as { names?: Record<string, string> }).names || {},
-    wrap: (names) => ({ names }),
-    onError: (msg) => showToast(msg),
-  });
+// VoiceConfigPanel + CharacterNamesPanel removed — merged into Character Studio.
 
-  const handleSave = async () => {
-    if (await save()) showToast("Character names saved");
-  };
-
-  const updateName = (personaId: string, name: string) => {
-    if (!edits) return;
-    const next = { ...edits };
-    if (name.trim()) next[personaId] = name;
-    else delete next[personaId];
-    setEdits(next);
-  };
-
-  const hasChanges = dirty;
-
-  const grouped = PERSONA_PACKS.map((pack) => ({
-    pack,
-    personas: PERSONA_LIBRARY.filter((p) => p.pack === pack.id),
-  }));
-
-  return (
-    <SettingsPanel
-      icon={<Tag className="w-4 h-4" />}
-      title="Character Names"
-      description="Customize display names for each character"
-    >
-      {loading ? (
-        <p className="text-label text-white/40">Loading...</p>
-      ) : (
-        <div className="space-y-5">
-          {grouped.map(({ pack, personas }) => (
-            <div key={pack.id}>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-sm">{pack.icon}</span>
-                <h3 className="text-label font-medium text-white/60 uppercase tracking-wider">
-                  {PACK_LABELS[pack.id] || pack.name}
-                </h3>
-              </div>
-              <div className="space-y-1.5">
-                {personas.map((persona) => (
-                  <div key={persona.id} className="flex items-center gap-3 py-1.5">
-                    <div className="flex-shrink-0 w-8 h-8">
-                      <MiiAvatar persona={persona} size={32} />
-                    </div>
-                    <div className="flex-shrink-0 w-36 min-w-0">
-                      <p className="text-body text-white/50 truncate leading-tight text-xs">
-                        {persona.name}
-                      </p>
-                    </div>
-                    <input
-                      type="text"
-                      value={edits?.[persona.id] || ""}
-                      onChange={(e) => updateName(persona.id, e.target.value)}
-                      placeholder={persona.name}
-                      className="flex-1 min-w-0 bg-surface-overlay border border-white/5 rounded-lg px-2.5 py-1.5 text-label text-white/70 placeholder:text-white/25 focus:outline-none focus:border-violet-500/50"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-          <div className="sticky bottom-0 bg-surface-raised flex justify-end pt-2 pb-1">
-            <button
-              onClick={handleSave}
-              disabled={!hasChanges || saving}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-label font-medium transition-colors ${
-                saved
-                  ? "bg-green-500/20 text-green-400"
-                  : hasChanges
-                    ? "bg-violet-500/20 text-violet-400 hover:bg-violet-500/30"
-                    : "bg-white/5 text-white/30 cursor-not-allowed"
-              }`}
-            >
-              {saved ? (
-                <><Check className="w-3.5 h-3.5" />Saved</>
-              ) : (
-                <><Save className="w-3.5 h-3.5" />{saving ? "Saving..." : "Save Names"}</>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-    </SettingsPanel>
-  );
-}
-
-function VoiceConfigPanel({ showToast }: { showToast: (msg: string) => void }) {
-  const { edits, setEdits, loading, saving, saved, dirty, save } = useServerConfig<Record<string, string>>({
-    getUrl: "/api/admin/voice-config",
-    putUrl: "/api/admin/voice-config",
-    extract: (data) => (data as { custom?: Record<string, string> }).custom || {},
-    wrap: (config) => {
-      // Strip empty values before sending — the server also cleans but we
-      // want the local "dirty" check to match what lives server-side.
-      const cleaned: Record<string, string> = {};
-      for (const [key, value] of Object.entries(config)) {
-        if (value.trim()) cleaned[key] = value.trim();
-      }
-      return { config: cleaned };
-    },
-    onError: (msg) => showToast(msg),
-  });
-
-  const handleSave = async () => {
-    if (await save()) showToast("Voice configuration saved");
-  };
-
-  const updateVoiceId = (personaId: string, voiceId: string) => {
-    if (!edits) return;
-    const next = { ...edits };
-    if (voiceId.trim()) next[personaId] = voiceId;
-    else delete next[personaId];
-    setEdits(next);
-  };
-
-  const hasChanges = dirty;
-
-  // Group personas by pack
-  const grouped = PERSONA_PACKS.map((pack) => ({
-    pack,
-    personas: PERSONA_LIBRARY.filter((p) => p.pack === pack.id),
-  }));
-
-  return (
-    <SettingsPanel
-      icon={<Volume2 className="w-4 h-4" />}
-      title="Voice Configuration"
-      description="Map ElevenLabs voice IDs to characters"
-    >
-      {loading ? (
-        <p className="text-label text-white/40">Loading voice config...</p>
-      ) : (
-        <div className="space-y-5">
-          {grouped.map(({ pack, personas }) => (
-            <div key={pack.id}>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-sm">{pack.icon}</span>
-                <h3 className="text-label font-medium text-white/60 uppercase tracking-wider">
-                  {PACK_LABELS[pack.id] || pack.name}
-                </h3>
-                <span className="text-label text-white/30">
-                  {personas.length}
-                </span>
-              </div>
-              <div className="space-y-1.5">
-                {personas.map((persona) => (
-                  <VoiceConfigRow
-                    key={persona.id}
-                    persona={persona}
-                    defaultVoiceId={ELEVENLABS_DEFAULT_VOICES[persona.id]}
-                    customVoiceId={edits?.[persona.id] || ""}
-                    onChange={(v) => updateVoiceId(persona.id, v)}
-                    showToast={showToast}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-
-          {/* Save button */}
-          <div className="sticky bottom-0 bg-surface-raised flex justify-end pt-2 pb-1">
-            <button
-              onClick={handleSave}
-              disabled={!hasChanges || saving}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-label font-medium transition-colors ${
-                saved
-                  ? "bg-green-500/20 text-green-400"
-                  : hasChanges
-                    ? "bg-violet-500/20 text-violet-400 hover:bg-violet-500/30"
-                    : "bg-white/5 text-white/30 cursor-not-allowed"
-              }`}
-            >
-              {saved ? (
-                <>
-                  <Check className="w-3.5 h-3.5" />
-                  Saved
-                </>
-              ) : (
-                <>
-                  <Save className="w-3.5 h-3.5" />
-                  {saving ? "Saving..." : "Save Voice Config"}
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-    </SettingsPanel>
-  );
-}
-
-function VoiceConfigRow({
-  persona,
-  defaultVoiceId,
-  customVoiceId,
-  onChange,
-  showToast,
-}: {
-  persona: Persona;
-  defaultVoiceId?: string;
-  customVoiceId: string;
-  onChange: (v: string) => void;
-  showToast: (msg: string) => void;
-}) {
-  const hasCustom = !!customVoiceId.trim();
-  const [testing, setTesting] = useState(false);
-
-  const effectiveVoiceId = customVoiceId.trim() || defaultVoiceId || "";
-
-  const handleTest = async () => {
-    if (!effectiveVoiceId) {
-      showToast("No voice ID to test");
-      return;
-    }
-    setTesting(true);
-    try {
-      const res = await fetch("/api/admin/voice-config/test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          voiceId: effectiveVoiceId,
-          text: `Hello, I'm ${persona.name}. This is a voice test.`,
-        }),
-      });
-
-      if (!res.ok) {
-        let msg = `Voice test failed (${res.status})`;
-        try {
-          const data = await res.json();
-          if (data?.detail) msg = `ElevenLabs: ${String(data.detail).slice(0, 120)}`;
-          else if (data?.error) msg = data.error;
-        } catch {}
-        showToast(msg);
-        return;
-      }
-
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audio.onended = () => URL.revokeObjectURL(url);
-      audio.onerror = () => {
-        URL.revokeObjectURL(url);
-        showToast("Audio playback failed");
-      };
-      await audio.play();
-    } catch (err: any) {
-      showToast(`Test error: ${err?.message || "unknown"}`);
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  return (
-    <div className="flex items-center gap-3 py-1.5">
-      {/* Avatar */}
-      <div className="flex-shrink-0 w-8 h-8">
-        <MiiAvatar persona={persona} size={32} />
-      </div>
-
-      {/* Name + archetype */}
-      <div className="flex-shrink-0 w-36 min-w-0">
-        <p className="text-body text-white/80 truncate leading-tight">
-          {persona.name}
-        </p>
-        <p className="text-[10px] text-white/35 truncate leading-tight">
-          {persona.archetype}
-        </p>
-      </div>
-
-      {/* Status dot */}
-      <div
-        className={`flex-shrink-0 w-2 h-2 rounded-full ${
-          hasCustom ? "bg-green-400" : "bg-white/20"
-        }`}
-        title={hasCustom ? "Custom voice configured" : "Using default fallback"}
-      />
-
-      {/* Voice ID input */}
-      <input
-        type="text"
-        value={customVoiceId}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={defaultVoiceId || "Rachel (default)"}
-        className="flex-1 min-w-0 bg-surface-overlay border border-white/5 rounded-lg px-2.5 py-1.5 text-label text-white/70 placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 font-mono"
-      />
-
-      {/* Test button — plays a sample so user can verify the voice ID works */}
-      <button
-        type="button"
-        onClick={handleTest}
-        disabled={testing || !effectiveVoiceId}
-        title="Preview this voice"
-        className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-surface-overlay border border-white/5 text-white/60 hover:text-violet-400 hover:border-violet-500/50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-      >
-        {testing ? (
-          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        ) : (
-          <Play className="w-3.5 h-3.5" />
-        )}
-      </button>
-    </div>
-  );
-}
 
 // ============================================================
 // Character Studio — per-character brain editor
@@ -1084,6 +766,24 @@ function CharacterBrainEditor({
         />
       </BrainField>
 
+      <BrainField label="ElevenLabs Voice ID">
+        <VoiceIdField
+          voiceId={def.voice?.voiceId ?? ""}
+          personaName={def.name ?? brain.id}
+          defaultVoiceId={ELEVENLABS_DEFAULT_VOICES[brain.id]}
+          onChange={(v) => {
+            setDraft((d) => ({
+              ...d,
+              definition: {
+                ...d.definition,
+                voice: { ...(d.definition.voice ?? {}), voiceId: v || undefined },
+              },
+            }));
+          }}
+          showToast={showToast}
+        />
+      </BrainField>
+
       <BrainField label="Archetype">
         <input
           type="text"
@@ -1225,6 +925,92 @@ function ListEditor({ items, onChange }: { items: string[]; onChange: (v: string
       rows={Math.max(2, Math.min(6, safeItems.length + 1))}
       className={brainInputClass}
     />
+  );
+}
+
+function VoiceIdField({
+  voiceId,
+  personaName,
+  defaultVoiceId,
+  onChange,
+  showToast,
+}: {
+  voiceId: string;
+  personaName: string;
+  defaultVoiceId?: string;
+  onChange: (v: string) => void;
+  showToast: (msg: string) => void;
+}) {
+  const [testing, setTesting] = useState(false);
+  const effectiveVoiceId = voiceId.trim() || defaultVoiceId || "";
+
+  const handleTest = async () => {
+    if (!effectiveVoiceId) {
+      showToast("No voice ID to test");
+      return;
+    }
+    setTesting(true);
+    try {
+      const res = await fetch("/api/admin/voice-config/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          voiceId: effectiveVoiceId,
+          text: `Hello, I'm ${personaName}. This is a voice test.`,
+        }),
+      });
+      if (!res.ok) {
+        let msg = `Voice test failed (${res.status})`;
+        try {
+          const data = await res.json();
+          if (data?.detail) msg = `ElevenLabs: ${String(data.detail).slice(0, 120)}`;
+          else if (data?.error) msg = data.error;
+        } catch { /* body already consumed or not JSON */ }
+        showToast(msg);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.onended = () => URL.revokeObjectURL(url);
+      audio.onerror = () => { URL.revokeObjectURL(url); showToast("Audio playback failed"); };
+      await audio.play();
+    } catch (err) {
+      showToast(`Test error: ${(err as Error).message}`);
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <div
+        className={`flex-shrink-0 w-2 h-2 rounded-full ${
+          voiceId.trim() ? "bg-green-400" : "bg-white/20"
+        }`}
+        title={voiceId.trim() ? "Custom voice configured" : "Using default fallback"}
+      />
+      <input
+        type="text"
+        value={voiceId}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={defaultVoiceId || "Default voice"}
+        className={`${brainInputClass} font-mono`}
+      />
+      <button
+        type="button"
+        onClick={handleTest}
+        disabled={testing || !effectiveVoiceId}
+        title="Preview this voice"
+        className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-surface-raised border border-white/5 text-white/60 hover:text-violet-400 hover:border-violet-500/50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      >
+        {testing ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        ) : (
+          <Play className="w-3.5 h-3.5" />
+        )}
+      </button>
+    </div>
   );
 }
 

@@ -131,6 +131,11 @@ function saveVoiceConfig(config: Record<string, string>): void {
 }
 
 function resolveVoiceId(personaId: string): string {
+  // Brain voice takes precedence — if set via Character Studio, it's the
+  // authoritative source. customVoiceConfig and ELEVENLABS_VOICES are
+  // legacy/fallback layers.
+  const brain = getCharacterBrain(personaId);
+  if (brain?.definition?.voice?.voiceId) return brain.definition.voice.voiceId;
   return customVoiceConfig[personaId] || ELEVENLABS_VOICES[personaId] || "21m00Tcm4TlvDq8ikWAM";
 }
 
@@ -962,6 +967,18 @@ app.put("/api/admin/characters/:id", (req, res) => {
 
   try {
     saveCharacterBrain(id, merged, notes);
+
+    // Sync voice config and character names so TTS and prompt resolution
+    // stay consistent. The brain is now the authoritative source.
+    if (merged.voice?.voiceId) {
+      customVoiceConfig[id] = merged.voice.voiceId;
+      saveVoiceConfig(customVoiceConfig);
+    }
+    if (merged.name) {
+      customCharacterNames[id] = merged.name;
+      saveCharacterConfig(customCharacterNames);
+    }
+
     console.log(`[CharacterBrain] Saved ${id} (notes: ${notes.length} chars)`);
     res.json({ saved: true, id });
   } catch (err) {
