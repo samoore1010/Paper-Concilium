@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
+/** Word-level timestamp from ElevenLabs STT or estimated fallback */
 export interface WordTimestamp {
   word: string;
   start: number;   // seconds from session start
