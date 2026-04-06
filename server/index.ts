@@ -552,30 +552,48 @@ Return ONLY the script text, no titles or annotations.`;
   }
 });
 
+// === LLM Model validation ===
+
+const ALLOWED_MODELS = ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-6"] as const;
+type AllowedModel = typeof ALLOWED_MODELS[number];
+const DEFAULT_REACTION_MODEL: AllowedModel = "claude-haiku-4-5-20251001";
+const DEFAULT_FEEDBACK_MODEL: AllowedModel = "claude-sonnet-4-6";
+
+function resolveModel(requested: string | undefined, fallback: AllowedModel): AllowedModel {
+  if (!requested) return fallback;
+  if (ALLOWED_MODELS.includes(requested as AllowedModel)) return requested as AllowedModel;
+  console.warn(`[Model] Invalid model "${requested}", falling back to "${fallback}"`);
+  return fallback;
+}
+
 // === LLM Reaction Endpoints ===
 
 app.post("/api/react", async (req, res) => {
   const client = getClient();
   if (!client) return res.status(503).json({ error: "LLM not configured." });
 
-  const { personaId, userText, sessionType, messageHistory, sourceContext } = req.body;
+  const { personaId, userText, sessionType, messageHistory, sourceContext, model: requestedModel } = req.body;
   if (!personaId || !userText) return res.status(400).json({ error: "personaId and userText required" });
 
+  const model = resolveModel(requestedModel, DEFAULT_REACTION_MODEL);
   const effectiveSessionType = sessionType || "business-pitch";
+  const startTime = Date.now();
   try {
     const persona = getPersonaPrompt(personaId, effectiveSessionType, customCharacterNames[personaId] || undefined);
     const prompt = buildReactionPrompt(persona, userText, effectiveSessionType, messageHistory || [], sourceContext || undefined);
     const message = await client.messages.create({
-      model: "claude-haiku-4-5-20251001", max_tokens: 300,
+      model, max_tokens: 300,
       system: persona.systemPrompt, messages: [{ role: "user", content: prompt }],
     });
+    const latencyMs = Date.now() - startTime;
     const text = message.content[0].type === "text" ? message.content[0].text : "";
     const parsed = safeParseJSON(text);
     if (!parsed) throw new Error("Failed to parse JSON");
-    res.json(parsed);
+    res.json({ ...parsed, _meta: { model, latencyMs, inputTokens: message.usage?.input_tokens, outputTokens: message.usage?.output_tokens } });
   } catch (error: any) {
+    const latencyMs = Date.now() - startTime;
     console.error("Reaction error:", error.message);
-    res.status(500).json({ error: "Failed to generate reaction", detail: error.message });
+    res.status(500).json({ error: "Failed to generate reaction", detail: error.message, _meta: { model, latencyMs } });
   }
 });
 
@@ -583,32 +601,37 @@ app.post("/api/react-batch", async (req, res) => {
   const client = getClient();
   if (!client) return res.status(503).json({ error: "LLM not configured." });
 
-  const { personaIds, userText, sessionType, messageHistory, sourceContext } = req.body;
+  const { personaIds, userText, sessionType, messageHistory, sourceContext, model: requestedModel } = req.body;
   if (!personaIds?.length || !userText) return res.status(400).json({ error: "personaIds and userText required" });
 
+  const model = resolveModel(requestedModel, DEFAULT_REACTION_MODEL);
   const effectiveSessionType = sessionType || "business-pitch";
+  const batchStartTime = Date.now();
   try {
     const results = await Promise.allSettled(
       personaIds.map(async (personaId: string) => {
+        const startTime = Date.now();
         const persona = getPersonaPrompt(personaId, effectiveSessionType, customCharacterNames[personaId] || undefined);
         const prompt = buildReactionPrompt(persona, userText, effectiveSessionType, messageHistory || [], sourceContext || undefined);
         const message = await client.messages.create({
-          model: "claude-haiku-4-5-20251001", max_tokens: 300,
+          model, max_tokens: 300,
           system: persona.systemPrompt, messages: [{ role: "user", content: prompt }],
         });
+        const latencyMs = Date.now() - startTime;
         const text = message.content[0].type === "text" ? message.content[0].text : "";
         const parsed = safeParseJSON(text);
         if (!parsed) throw new Error("Failed to parse JSON");
-        return { personaId, ...parsed };
+        return { personaId, ...parsed, _meta: { model, latencyMs, inputTokens: message.usage?.input_tokens, outputTokens: message.usage?.output_tokens } };
       })
     );
 
     const reactions = results.filter((r): r is PromiseFulfilledResult<any> => r.status === "fulfilled").map((r) => r.value);
     const errors = results.filter((r): r is PromiseRejectedResult => r.status === "rejected").map((r, i) => ({ personaId: personaIds[i], error: r.reason?.message }));
-    res.json({ reactions, errors });
+    const batchLatencyMs = Date.now() - batchStartTime;
+    res.json({ reactions, errors, _meta: { model, batchLatencyMs } });
   } catch (error: any) {
     console.error("Batch reaction error:", error.message);
-    res.status(500).json({ error: "Failed to generate reactions" });
+    res.status(500).json({ error: "Failed to generate reactions", _meta: { model } });
   }
 });
 
@@ -618,30 +641,34 @@ app.post("/api/feedback", async (req, res) => {
   const client = getClient();
   if (!client) return res.status(503).json({ error: "LLM not configured." });
 
-  const { personaId, transcript, sessionType } = req.body;
+  const { personaId, transcript, sessionType, model: requestedModel } = req.body;
   if (!personaId || !transcript) return res.status(400).json({ error: "personaId and transcript required" });
 
+  const model = resolveModel(requestedModel, DEFAULT_FEEDBACK_MODEL);
   const effectiveSessionType = sessionType || "business-pitch";
+  const startTime = Date.now();
   try {
     const persona = getPersonaPrompt(personaId, effectiveSessionType, customCharacterNames[personaId] || undefined);
     const prompt = buildFeedbackPrompt(persona, transcript, effectiveSessionType);
-    console.log(`[Feedback] Generating for ${personaId}...`);
+    console.log(`[Feedback] Generating for ${personaId} with model ${model}...`);
 
     const message = await client.messages.create({
-      model: "claude-sonnet-4-6", max_tokens: 1500,
+      model, max_tokens: 1500,
       system: persona.systemPrompt, messages: [{ role: "user", content: prompt }],
     });
 
+    const latencyMs = Date.now() - startTime;
     const text = message.content[0].type === "text" ? message.content[0].text : "";
     console.log(`[Feedback] Raw for ${personaId}: ${text.substring(0, 100)}...`);
     const parsed = safeParseJSON(text);
-    if (!parsed) return res.status(500).json({ error: "Failed to parse LLM response" });
+    if (!parsed) return res.status(500).json({ error: "Failed to parse LLM response", _meta: { model, latencyMs } });
 
     console.log(`[Feedback] Success for ${personaId}: score ${parsed.overallScore}`);
-    res.json({ personaId, personaName: personaId, ...parsed });
+    res.json({ personaId, personaName: personaId, ...parsed, _meta: { model, latencyMs, inputTokens: message.usage?.input_tokens, outputTokens: message.usage?.output_tokens } });
   } catch (error: any) {
+    const latencyMs = Date.now() - startTime;
     console.error(`[Feedback] Error for ${personaId}:`, error.message);
-    res.status(500).json({ error: "Failed to generate feedback", detail: error.message });
+    res.status(500).json({ error: "Failed to generate feedback", detail: error.message, _meta: { model, latencyMs } });
   }
 });
 
@@ -649,33 +676,38 @@ app.post("/api/feedback-batch", async (req, res) => {
   const client = getClient();
   if (!client) return res.status(503).json({ error: "LLM not configured." });
 
-  const { personaIds, transcript, sessionType } = req.body;
+  const { personaIds, transcript, sessionType, model: requestedModel } = req.body;
   if (!personaIds?.length || !transcript) return res.status(400).json({ error: "personaIds and transcript required" });
 
+  const model = resolveModel(requestedModel, DEFAULT_FEEDBACK_MODEL);
   const effectiveSessionType = sessionType || "business-pitch";
+  const batchStartTime = Date.now();
   try {
     const feedback: any[] = [];
     for (const personaId of personaIds) {
       try {
+        const startTime = Date.now();
         const persona = getPersonaPrompt(personaId, effectiveSessionType, customCharacterNames[personaId] || undefined);
         const prompt = buildFeedbackPrompt(persona, transcript, effectiveSessionType);
         const message = await client.messages.create({
-          model: "claude-sonnet-4-6", max_tokens: 1500,
+          model, max_tokens: 1500,
           system: persona.systemPrompt, messages: [{ role: "user", content: prompt }],
         });
+        const latencyMs = Date.now() - startTime;
         const text = message.content[0].type === "text" ? message.content[0].text : "";
         const parsed = safeParseJSON(text);
         if (!parsed) throw new Error("Failed to parse JSON");
-        feedback.push({ personaId, ...parsed });
-        console.log(`[Feedback-Batch] ${personaId}: score ${parsed.overallScore}`);
+        feedback.push({ personaId, ...parsed, _meta: { model, latencyMs, inputTokens: message.usage?.input_tokens, outputTokens: message.usage?.output_tokens } });
+        console.log(`[Feedback-Batch] ${personaId}: score ${parsed.overallScore} (${model}, ${latencyMs}ms)`);
       } catch (err: any) {
         console.error(`[Feedback-Batch] Failed for ${personaId}:`, err.message);
       }
     }
-    res.json({ feedback });
+    const batchLatencyMs = Date.now() - batchStartTime;
+    res.json({ feedback, _meta: { model, batchLatencyMs } });
   } catch (error: any) {
     console.error("Batch feedback error:", error.message);
-    res.status(500).json({ error: "Failed to generate feedback" });
+    res.status(500).json({ error: "Failed to generate feedback", _meta: { model } });
   }
 });
 

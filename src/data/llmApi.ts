@@ -1,5 +1,20 @@
 import { ReactionType } from "./personas";
 
+export type LLMModel = "claude-haiku-4-5-20251001" | "claude-sonnet-4-6" | "claude-opus-4-6";
+
+export const LLM_MODEL_LABELS: Record<LLMModel, string> = {
+  "claude-haiku-4-5-20251001": "Haiku 4.5",
+  "claude-sonnet-4-6": "Sonnet 4.6",
+  "claude-opus-4-6": "Opus 4.6",
+};
+
+export interface LLMMetadata {
+  model: string;
+  latencyMs: number;
+  inputTokens?: number;
+  outputTokens?: number;
+}
+
 export interface LLMReaction {
   personaId: string;
   reaction: ReactionType;
@@ -10,6 +25,7 @@ export interface LLMReaction {
   urgency?: "low" | "medium" | "high";
   /** Reaction intensity 0.3-1.0 (mild to emphatic). Drives animation amplitude. */
   intensity?: number;
+  _meta?: LLMMetadata;
 }
 
 export interface LLMFeedback {
@@ -20,6 +36,12 @@ export interface LLMFeedback {
   weaknesses: string[];
   suggestion: string;
   emotionalResponse: string;
+}
+
+export interface LLMBatchResult<T> {
+  items: T[];
+  errors: { personaId: string; error: string }[];
+  _meta?: { model: string; batchLatencyMs: number };
 }
 
 const API_BASE = "";  // Same origin
@@ -39,15 +61,19 @@ export async function getLLMReactionsBatch(
   userText: string,
   sessionType: string,
   messageHistory: string[],
-  sourceContext?: { summary: string; filenames: string[]; combinedText: string }
+  sourceContext?: { summary: string; filenames: string[]; combinedText: string },
+  model?: LLMModel
 ): Promise<LLMReaction[]> {
   const res = await fetch(`${API_BASE}/api/react-batch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ personaIds, userText, sessionType, messageHistory, sourceContext }),
+    body: JSON.stringify({ personaIds, userText, sessionType, messageHistory, sourceContext, model }),
   });
 
-  if (!res.ok) throw new Error("Failed to get LLM reactions");
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || errData.error || "Failed to get LLM reactions");
+  }
 
   const data = await res.json();
   return (data.reactions || []).map((r: any) => {
@@ -66,6 +92,7 @@ export async function getLLMReactionsBatch(
       shouldInterrupt: r.shouldInterrupt === true || r.shouldInterrupt === "true",
       urgency,
       intensity,
+      _meta: r._meta || data._meta,
     };
   });
 }
@@ -73,12 +100,13 @@ export async function getLLMReactionsBatch(
 export async function getLLMFeedbackBatch(
   personaIds: string[],
   transcript: string,
-  sessionType: string
+  sessionType: string,
+  model?: LLMModel
 ): Promise<LLMFeedback[]> {
   const res = await fetch(`${API_BASE}/api/feedback-batch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ personaIds, transcript, sessionType }),
+    body: JSON.stringify({ personaIds, transcript, sessionType, model }),
   });
 
   if (!res.ok) throw new Error("Failed to get LLM feedback");

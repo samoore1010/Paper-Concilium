@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Persona, ReactionType } from "../data/personas";
 import { generateLiveReaction, generateSessionFeedback, FeedbackItem, shouldRaiseHand } from "../data/feedbackEngine";
-import { checkLLMAvailability, getLLMReactionsBatch } from "../data/llmApi";
+import { checkLLMAvailability, getLLMReactionsBatch, LLMModel } from "../data/llmApi";
+import { DiagnosticEntry } from "./QuestionQueue";
 import { getTheme } from "../data/themes";
 import { getSessionBehavior } from "../data/sessionBehavior";
 import { getVoiceConfig } from "../data/voiceConfig";
@@ -67,6 +68,15 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
   const [generatingCount, setGeneratingCount] = useState(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval>>(undefined);
+
+  // Admin model selection
+  const [reactionModel, setReactionModel] = useState<LLMModel>("claude-haiku-4-5-20251001");
+  const [feedbackModel, setFeedbackModel] = useState<LLMModel>("claude-sonnet-4-6");
+  const [diagnostics, setDiagnostics] = useState<DiagnosticEntry[]>([]);
+
+  const addDiagnostic = useCallback((entry: Omit<DiagnosticEntry, "id" | "timestamp">) => {
+    setDiagnostics((prev) => [...prev.slice(-99), { ...entry, id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, timestamp: Date.now() }]);
+  }, []);
 
   const [showTeleprompter, setShowTeleprompter] = useState(!!scriptConfig?.text);
   const [continuousActive, setContinuousActive] = useState(false);
@@ -496,9 +506,26 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
         text,
         sessionType,
         [...recentChat, `You: ${text}`],
-        scriptConfig?.sourceContext || undefined
+        scriptConfig?.sourceContext || undefined,
+        reactionModel
       ).then((reactions) => {
         llmInFlightRef.current = false;
+
+        // Log diagnostics from metadata
+        reactions.forEach((r) => {
+          if (r._meta) {
+            addDiagnostic({
+              type: "reaction",
+              model: r._meta.model,
+              latencyMs: r._meta.latencyMs,
+              inputTokens: r._meta.inputTokens,
+              outputTokens: r._meta.outputTokens,
+              personaId: r.personaId,
+              status: "success",
+              message: `${r.reaction} — ${(r.question || r.comment || "no text").substring(0, 60)}`,
+            });
+          }
+        });
         if (sessionEndedRef.current) return;
 
         // Separate interrupters from non-interrupters
@@ -600,13 +627,19 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
       }).catch((err) => {
         llmInFlightRef.current = false;
         console.error("LLM reaction failed, falling back to keywords:", err);
+        addDiagnostic({
+          type: "error",
+          model: reactionModel,
+          status: "error",
+          message: err.message || "LLM reaction call failed",
+        });
         fallbackKeywordReactions(text, newMC);
       });
     } else {
       // === KEYWORD FALLBACK ===
       fallbackKeywordReactions(text, newMC);
     }
-  }, [personas, elapsed, messageCount, personaStates, updateMetrics, llmAvailable, sessionType, transcript, chatMessages, processNextInterrupt, scheduleNextInterrupt]);
+  }, [personas, elapsed, messageCount, personaStates, updateMetrics, llmAvailable, sessionType, transcript, chatMessages, processNextInterrupt, scheduleNextInterrupt, reactionModel, addDiagnostic]);
 
   // Keep processUserInput ref in sync so callbacks always use the latest version
   processUserInputRef.current = processUserInput;
@@ -758,6 +791,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
               personaId: persona.id,
               transcript: ft,
               sessionType,
+              model: feedbackModel,
             }),
           });
           if (res.ok) {
@@ -772,10 +806,24 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
               suggestion: data.suggestion || "",
               emotionalResponse: data.emotionalResponse || "",
             });
+            if (data._meta) {
+              addDiagnostic({
+                type: "feedback",
+                model: data._meta.model,
+                latencyMs: data._meta.latencyMs,
+                inputTokens: data._meta.inputTokens,
+                outputTokens: data._meta.outputTokens,
+                personaId: persona.id,
+                status: "success",
+                message: `Score: ${data.overallScore} — ${(data.summary || "").substring(0, 60)}`,
+              });
+            }
           } else {
+            addDiagnostic({ type: "error", model: feedbackModel, personaId: persona.id, status: "error", message: `Feedback HTTP ${res.status}` });
             feedback.push(generateSessionFeedback(persona, ft));
           }
-        } catch {
+        } catch (err: any) {
+          addDiagnostic({ type: "error", model: feedbackModel, personaId: persona.id, status: "error", message: err.message || "Feedback call failed" });
           feedback.push(generateSessionFeedback(persona, ft));
         }
         setGeneratingCount(feedback.length);
@@ -1016,6 +1064,9 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
               onDismiss={(id) => setQuestionQueue((prev) => prev.filter((q) => q.id !== id))}
               onToggleTTS={() => setTtsEnabled(!ttsEnabled)}
               continuousActive={continuousActive} interimTranscript={visibleInterim}
+              reactionModel={reactionModel} feedbackModel={feedbackModel}
+              onReactionModelChange={setReactionModel} onFeedbackModelChange={setFeedbackModel}
+              diagnostics={diagnostics}
             />
           </div>
         </div>
@@ -1069,6 +1120,9 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
                     onDismiss={(id) => setQuestionQueue((prev) => prev.filter((q) => q.id !== id))}
                     onToggleTTS={() => setTtsEnabled(!ttsEnabled)}
                     continuousActive={continuousActive} interimTranscript={visibleInterim}
+                    reactionModel={reactionModel} feedbackModel={feedbackModel}
+                    onReactionModelChange={setReactionModel} onFeedbackModelChange={setFeedbackModel}
+                    diagnostics={diagnostics}
                   />
                 </div>
               </motion.div>
@@ -1217,7 +1271,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
 }
 
 // === TAB CONTENT (shared by desktop sidebar + mobile bottom sheet) ===
-function TabContent({ sideTab, questionQueue, personas, speakingPersonaId, ttsEnabled, speechMetrics, prosodyMetrics, visualMetrics, chatMessages, chatEndRef, availableProviders, activeProvider, onProviderChange, onListen, onRead, onDismiss, onToggleTTS, continuousActive, interimTranscript }: {
+function TabContent({ sideTab, questionQueue, personas, speakingPersonaId, ttsEnabled, speechMetrics, prosodyMetrics, visualMetrics, chatMessages, chatEndRef, availableProviders, activeProvider, onProviderChange, onListen, onRead, onDismiss, onToggleTTS, continuousActive, interimTranscript, reactionModel, feedbackModel, onReactionModelChange, onFeedbackModelChange, diagnostics }: {
   sideTab: SideTab;
   questionQueue: QueuedQuestion[]; personas: Persona[]; speakingPersonaId: string | null;
   ttsEnabled: boolean;
@@ -1230,6 +1284,9 @@ function TabContent({ sideTab, questionQueue, personas, speakingPersonaId, ttsEn
   onListen: (q: QueuedQuestion) => void; onRead: (q: QueuedQuestion) => void;
   onDismiss: (id: string) => void; onToggleTTS: () => void;
   continuousActive: boolean; interimTranscript: string;
+  reactionModel?: LLMModel; feedbackModel?: LLMModel;
+  onReactionModelChange?: (m: LLMModel) => void; onFeedbackModelChange?: (m: LLMModel) => void;
+  diagnostics?: DiagnosticEntry[];
 }) {
   if (sideTab === "coach") {
     return (
@@ -1267,6 +1324,9 @@ function TabContent({ sideTab, questionQueue, personas, speakingPersonaId, ttsEn
         questions={questionQueue} personas={personas} speakingPersonaId={speakingPersonaId}
         ttsEnabled={ttsEnabled} availableProviders={availableProviders} activeProvider={activeProvider as any} onProviderChange={onProviderChange}
         onListen={onListen} onRead={onRead} onDismiss={onDismiss} onToggleTTS={onToggleTTS}
+        reactionModel={reactionModel} feedbackModel={feedbackModel}
+        onReactionModelChange={onReactionModelChange} onFeedbackModelChange={onFeedbackModelChange}
+        diagnostics={diagnostics}
       />
     );
   }
