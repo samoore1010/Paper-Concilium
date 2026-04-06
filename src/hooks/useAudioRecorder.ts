@@ -13,6 +13,8 @@ interface UseAudioRecorderReturn {
   getRecording: () => RecordingData;
   /** Mix a TTS audio blob into the recording stream (audience/character audio) */
   mixAudioBlob: (blob: Blob) => void;
+  /** Return the epoch ms when recording started (for cross-hook synchronization) */
+  getStartTime: () => number;
 }
 
 export function useAudioRecorder(): UseAudioRecorderReturn {
