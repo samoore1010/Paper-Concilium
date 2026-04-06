@@ -1,14 +1,29 @@
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Persona } from "../data/personas";
 import { HandRaiseEvent } from "../data/feedbackEngine";
 import { MiiAvatar } from "./MiiAvatar";
 import { TTSProvider } from "../hooks/useTTS";
+import { LLMModel, LLM_MODEL_LABELS, LLMMetadata } from "../data/llmApi";
 
 export interface QueuedQuestion {
   id: string;
   personaId: string;
   question: string;
   timestamp: number;
+}
+
+export interface DiagnosticEntry {
+  id: string;
+  timestamp: number;
+  type: "reaction" | "feedback" | "tts" | "error";
+  model?: string;
+  latencyMs?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  personaId?: string;
+  status: "success" | "error";
+  message: string;
 }
 
 interface QuestionQueueProps {
@@ -23,6 +38,39 @@ interface QuestionQueueProps {
   onRead: (question: QueuedQuestion) => void;
   onDismiss: (questionId: string) => void;
   onToggleTTS: () => void;
+  // Admin model controls
+  reactionModel?: LLMModel;
+  feedbackModel?: LLMModel;
+  onReactionModelChange?: (m: LLMModel) => void;
+  onFeedbackModelChange?: (m: LLMModel) => void;
+  diagnostics?: DiagnosticEntry[];
+}
+
+const ALL_MODELS: LLMModel[] = ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-6"];
+
+function ModelPicker({ label, value, onChange, color }: { label: string; value: LLMModel; onChange: (m: LLMModel) => void; color: string }) {
+  const colorMap: Record<string, { active: string; badge: string }> = {
+    amber: { active: "bg-amber-500/20 text-amber-300", badge: "text-amber-400" },
+    violet: { active: "bg-violet-500/20 text-violet-300", badge: "text-violet-400" },
+  };
+  const colors = colorMap[color] || colorMap.amber;
+
+  return (
+    <div className="flex items-center gap-1 flex-wrap">
+      <span className="text-caption text-white/30 mr-1">{label}:</span>
+      {ALL_MODELS.map((m) => (
+        <button
+          key={m}
+          onClick={() => onChange(m)}
+          className={`text-caption px-1.5 py-0.5 rounded transition-colors ${
+            value === m ? colors.active : "bg-white/5 text-white/30 hover:text-white/50"
+          }`}
+        >
+          {LLM_MODEL_LABELS[m]}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 export function QuestionQueue({
@@ -37,7 +85,14 @@ export function QuestionQueue({
   onRead,
   onDismiss,
   onToggleTTS,
+  reactionModel = "claude-haiku-4-5-20251001",
+  feedbackModel = "claude-sonnet-4-6",
+  onReactionModelChange,
+  onFeedbackModelChange,
+  diagnostics = [],
 }: QuestionQueueProps) {
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+
   const providerLabels: Record<string, string> = {
     auto: "Auto",
     elevenlabs: "ElevenLabs",
@@ -45,9 +100,16 @@ export function QuestionQueue({
     browser: "Browser",
   };
 
+  const recentDiags = diagnostics.slice(-20).reverse();
+  const successCount = diagnostics.filter((d) => d.status === "success").length;
+  const errorCount = diagnostics.filter((d) => d.status === "error").length;
+  const avgLatency = diagnostics.filter((d) => d.latencyMs).length > 0
+    ? Math.round(diagnostics.filter((d) => d.latencyMs).reduce((sum, d) => sum + (d.latencyMs || 0), 0) / diagnostics.filter((d) => d.latencyMs).length)
+    : 0;
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* TTS controls */}
+      {/* TTS + Model controls */}
       <div className="px-3 py-2 border-b border-white/5 space-y-1.5">
         <div className="flex items-center justify-between">
           <span className="text-caption text-white/40 uppercase tracking-wider">Voice Feedback</span>
@@ -84,6 +146,87 @@ export function QuestionQueue({
           </div>
         )}
       </div>
+
+      {/* Model selection controls */}
+      {(onReactionModelChange || onFeedbackModelChange) && (
+        <div className="px-3 py-2 border-b border-white/5 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-caption text-white/40 uppercase tracking-wider">LLM Models</span>
+            <button
+              onClick={() => setShowDiagnostics(!showDiagnostics)}
+              className={`text-caption px-2 py-0.5 rounded transition-colors ${
+                showDiagnostics ? "bg-cyan-500/20 text-cyan-300" : "bg-white/5 text-white/30 hover:text-white/50"
+              }`}
+            >
+              {showDiagnostics ? "Hide Log" : "Show Log"}
+            </button>
+          </div>
+
+          {onReactionModelChange && (
+            <ModelPicker label="Reactions" value={reactionModel} onChange={onReactionModelChange} color="amber" />
+          )}
+          {onFeedbackModelChange && (
+            <ModelPicker label="Feedback" value={feedbackModel} onChange={onFeedbackModelChange} color="violet" />
+          )}
+
+          {/* Quick stats bar */}
+          {diagnostics.length > 0 && (
+            <div className="flex items-center gap-3 text-caption">
+              <span className="text-emerald-400">{successCount} ok</span>
+              {errorCount > 0 && <span className="text-red-400">{errorCount} err</span>}
+              {avgLatency > 0 && <span className="text-white/30">avg {avgLatency}ms</span>}
+              <span className="text-white/20">|</span>
+              <span className="text-white/30">{diagnostics.length} calls</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Diagnostics log panel */}
+      {showDiagnostics && (
+        <div className="border-b border-white/5 max-h-48 overflow-y-auto">
+          {recentDiags.length === 0 ? (
+            <p className="text-caption text-white/20 text-center py-3 px-2">
+              No API calls yet. Start presenting to see diagnostics.
+            </p>
+          ) : (
+            <div className="divide-y divide-white/5">
+              {recentDiags.map((d) => (
+                <div key={d.id} className="px-3 py-1.5 text-caption space-y-0.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${d.status === "success" ? "bg-emerald-400" : "bg-red-400"}`} />
+                      <span className={`font-medium truncate ${
+                        d.type === "reaction" ? "text-amber-300" :
+                        d.type === "feedback" ? "text-violet-300" :
+                        d.type === "tts" ? "text-blue-300" :
+                        "text-red-300"
+                      }`}>
+                        {d.type}
+                      </span>
+                      {d.model && (
+                        <span className="text-white/20 truncate">
+                          {LLM_MODEL_LABELS[d.model as LLMModel] || d.model}
+                        </span>
+                      )}
+                      {d.personaId && (
+                        <span className="text-white/15 truncate">{d.personaId}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0 text-white/25">
+                      {d.latencyMs !== undefined && <span>{d.latencyMs}ms</span>}
+                      {d.inputTokens !== undefined && <span>{d.inputTokens}+{d.outputTokens}tok</span>}
+                    </div>
+                  </div>
+                  {d.status === "error" && (
+                    <p className="text-red-400/70 text-caption truncate pl-3">{d.message}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Queue list */}
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-2">
