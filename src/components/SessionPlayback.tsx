@@ -94,7 +94,7 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
       ctx.stroke();
     }
 
-    const maxTime = timeline[timeline.length - 1]?.time || duration || 1;
+    const maxTime = duration || timeline[timeline.length - 1]?.time || 1;
 
     // Time axis labels and vertical gridlines
     const timeInterval = maxTime <= 60 ? 15 : maxTime <= 180 ? 30 : 60;
@@ -276,7 +276,7 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const pct = x / rect.width;
-    const maxTime = timeline[timeline.length - 1]?.time || duration || 1;
+    const maxTime = duration || timeline[timeline.length - 1]?.time || 1;
     audio.currentTime = pct * maxTime;
     setCurrentTime(audio.currentTime);
   }, [timeline, duration]);
@@ -288,7 +288,7 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const pct = x / rect.width;
-    const maxTime = timeline[timeline.length - 1]?.time || duration || 1;
+    const maxTime = duration || timeline[timeline.length - 1]?.time || 1;
     setWaveformHoverTime(pct * maxTime);
   }, [timeline, duration]);
 
@@ -408,41 +408,11 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
         </div>
       )}
 
-      {/* Session Chat Log */}
-      {chatMessages.length > 0 && (
-        <div className="space-y-1">
-          <div className="text-caption text-white/40 uppercase tracking-wider">Session Chat Log</div>
-          <div className="max-h-[300px] overflow-y-auto scroll-touch space-y-0.5 rounded-lg bg-surface-raised border border-white/5 p-2">
-            {chatMessages.map((msg, i) => {
-              const isYou = msg.from === "You";
-              const isActive = Math.abs(msg.time - currentTime) < 2;
-              return (
-                <button
-                  key={i}
-                  onClick={() => {
-                    if (audioRef.current) {
-                      audioRef.current.currentTime = msg.time;
-                      setCurrentTime(msg.time);
-                    }
-                  }}
-                  className={`w-full text-left flex items-start gap-2 px-2 py-1.5 rounded text-label transition-colors ${
-                    isActive ? "bg-white/10" : "hover:bg-surface-overlay"
-                  }`}
-                >
-                  <span className="text-white/30 font-mono text-caption w-10 flex-shrink-0 pt-0.5">{formatTime(msg.time)}</span>
-                  <span className={`font-medium flex-shrink-0 ${isYou ? "text-blue-400" : "text-amber-400"}`}>{msg.from}:</span>
-                  <span className="text-white/60 break-words">{msg.text}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Interactive Transcript with Word-Level Highlights */}
-      {wordTimestamps.length > 0 && (
+      {/* Interactive Transcript (merged with chat log) */}
+      {(wordTimestamps.length > 0 || chatMessages.length > 0) && (
         <InteractiveTranscript
           wordTimestamps={wordTimestamps}
+          chatMessages={chatMessages}
           timeline={timeline}
           currentTime={currentTime}
           waveformHoverTime={waveformHoverTime}
@@ -592,6 +562,7 @@ function CoachingCard({ title, rating, advice, stats, className }: {
 
 function InteractiveTranscript({
   wordTimestamps,
+  chatMessages = [],
   timeline,
   currentTime,
   waveformHoverTime,
@@ -605,6 +576,7 @@ function InteractiveTranscript({
   fillerCount,
 }: {
   wordTimestamps: WordTimestamp[];
+  chatMessages?: ChatMessage[];
   timeline: ProsodyFrame[];
   currentTime: number;
   waveformHoverTime: number | null;
@@ -722,15 +694,53 @@ function InteractiveTranscript({
         ))}
       </div>
 
-      {/* Transcript body */}
+      {/* Transcript body — unified view with user words + audience messages */}
       <div
         ref={scrollRef}
-        className="max-h-[350px] overflow-y-auto scroll-touch rounded-lg bg-surface-raised border border-white/5 p-4 leading-relaxed"
+        className="max-h-[400px] overflow-y-auto scroll-touch rounded-lg bg-surface-raised border border-white/5 p-4 leading-relaxed"
       >
-        <p className={`${fontSizeClass} text-white/70 leading-loose`}>
-          {wordTimestamps.map((w, idx) => {
+        {/* Build a unified timeline: user words interspersed with audience chat messages */}
+        {(() => {
+          // Find where each chat message should be inserted (by time)
+          const audienceInsertPoints = new Map<number, ChatMessage[]>(); // wordIndex → messages to insert before it
+          const trailingMessages: ChatMessage[] = [];
+          const nonUserMessages = chatMessages.filter((m) => m.from !== "You");
+
+          nonUserMessages.forEach((msg) => {
+            // Find the first word that comes after this message's time
+            const insertIdx = wordTimestamps.findIndex((w) => w.start > msg.time);
+            if (insertIdx >= 0) {
+              const existing = audienceInsertPoints.get(insertIdx) || [];
+              existing.push(msg);
+              audienceInsertPoints.set(insertIdx, existing);
+            } else {
+              trailingMessages.push(msg);
+            }
+          });
+
+          const elements: React.ReactNode[] = [];
+
+          wordTimestamps.forEach((w, idx) => {
+            // Insert audience messages that fall before this word
+            const msgsHere = audienceInsertPoints.get(idx);
+            if (msgsHere) {
+              msgsHere.forEach((msg, mi) => {
+                elements.push(
+                  <span
+                    key={`chat-${idx}-${mi}`}
+                    onClick={() => onSeek(Math.max(0, msg.time - 0.5))}
+                    className="block my-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 cursor-pointer hover:bg-amber-500/15 transition-colors"
+                  >
+                    <span className="text-amber-400 font-medium text-caption">{msg.from}</span>
+                    <span className="text-white/50 text-caption ml-2 font-mono">{formatTimeCompact(msg.time)}</span>
+                    <br />
+                    <span className="text-white/60">{msg.text}</span>
+                  </span>
+                );
+              });
+            }
+
             const isCurrent = currentTime >= w.start && currentTime <= w.end + 0.3;
-            // Bidirectional: is the waveform hovering over this word?
             const isWaveformHovered = waveformHoverTime !== null && waveformHoverTime >= w.start && waveformHoverTime <= w.end + 0.3;
             const tags = wordAnnotations.get(idx);
             const isFiller = tags?.has("filler");
@@ -738,36 +748,29 @@ function InteractiveTranscript({
             const isMonotone = tags?.has("monotone");
             const isFiltered = filter !== "all" && shouldHighlight(idx);
 
-            // Determine styling
             let cls = "cursor-pointer rounded px-0.5 transition-all duration-150 ";
             if (isWaveformHovered) {
               cls += "bg-indigo-500/30 text-white ring-1 ring-indigo-400/50 font-medium ";
             } else if (isCurrent) {
               cls += "bg-blue-500/30 text-white font-medium ";
             } else if (isFiltered || (filter === "all" && isFiller)) {
-              if (isFiller) {
-                cls += "bg-orange-500/20 text-orange-300 underline decoration-orange-400/40 decoration-wavy ";
-              } else if (isQuiet) {
-                cls += "bg-red-500/15 text-red-300/80 ";
-              } else if (isMonotone) {
-                cls += "bg-gray-500/15 text-gray-400 ";
-              }
+              if (isFiller) cls += "bg-orange-500/20 text-orange-300 underline decoration-orange-400/40 decoration-wavy ";
+              else if (isQuiet) cls += "bg-red-500/15 text-red-300/80 ";
+              else if (isMonotone) cls += "bg-gray-500/15 text-gray-400 ";
             } else if (filter !== "all" && !isFiltered) {
-              cls += "text-white/25 "; // dim non-matching words
+              cls += "text-white/25 ";
             }
-
-            // Add hover effect
             cls += "hover:bg-white/10 ";
 
-            return (
+            elements.push(
               <span
-                key={idx}
+                key={`w-${idx}`}
                 onClick={() => onSeek(Math.max(0, w.start - 0.5))}
                 onMouseEnter={() => onHoverWord(w.start, w.end)}
                 onMouseLeave={onHoverLeave}
                 className={cls}
                 title={[
-                  `${formatTimeCompact(w.start)}`,
+                  formatTimeCompact(w.start),
                   isFiller ? "Filler word" : "",
                   isQuiet ? "Low volume" : "",
                   isMonotone ? "Monotone delivery" : "",
@@ -776,8 +779,26 @@ function InteractiveTranscript({
                 {w.word}{" "}
               </span>
             );
-          })}
-        </p>
+          });
+
+          // Trailing audience messages after all words
+          trailingMessages.forEach((msg, i) => {
+            elements.push(
+              <span
+                key={`trail-${i}`}
+                onClick={() => onSeek(Math.max(0, msg.time - 0.5))}
+                className="block my-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 cursor-pointer hover:bg-amber-500/15 transition-colors"
+              >
+                <span className="text-amber-400 font-medium text-caption">{msg.from}</span>
+                <span className="text-white/50 text-caption ml-2 font-mono">{formatTimeCompact(msg.time)}</span>
+                <br />
+                <span className="text-white/60">{msg.text}</span>
+              </span>
+            );
+          });
+
+          return <div className={`${fontSizeClass} text-white/70 leading-loose`}>{elements}</div>;
+        })()}
       </div>
 
       {filter !== "all" && (
