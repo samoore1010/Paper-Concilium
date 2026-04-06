@@ -335,6 +335,7 @@ export function FeedbackView({ feedback, transcript, recordingData, personas: se
               timeline={recordingData.timeline}
               events={generateSessionEvents(recordingData.timeline, latestSession?.speechMetrics?.fillerWordCount || 0, recordingData.chatMessages)}
               transcript={transcript}
+              chatMessages={recordingData.chatMessages}
               wpm={latestSession?.speechMetrics?.wordsPerMinute || 0}
               fillerCount={latestSession?.speechMetrics?.fillerWordCount || 0}
               sessionType={latestSession?.sessionType || "business-pitch"}
