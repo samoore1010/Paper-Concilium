@@ -322,6 +322,8 @@ export function useProsody() {
   }, []);
 
   const getTimeline = useCallback(() => [...timelineRef.current], []);
+  /** Return the epoch ms when analysis started (for cross-hook synchronization) */
+  const getStartTime = useCallback(() => analysisStartRef.current, []);
 
   return {
     metrics,
@@ -332,5 +334,6 @@ export function useProsody() {
     startCalibration,
     skipCalibration,
     getTimeline,
+    getStartTime,
   };
 }

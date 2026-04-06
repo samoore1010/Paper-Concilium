@@ -154,8 +154,8 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
   const stopListening = useElSTT ? elSTT.stopListening : webSpeech.stopListening;
   const consumeNewText = useElSTT ? elSTT.consumeNewText : webSpeech.consumeNewText;
   const { metrics: speechMetrics, updateMetrics } = useSpeechMetrics();
-  const { metrics: prosodyMetrics, isAnalyzing: isProsodyActive, calibration: prosodyCalibration, startAnalysis: startProsody, stopAnalysis: stopProsody, getTimeline } = useProsody();
-  const { startRecording, stopRecording, getRecording, mixAudioBlob } = useAudioRecorder();
+  const { metrics: prosodyMetrics, isAnalyzing: isProsodyActive, calibration: prosodyCalibration, startAnalysis: startProsody, stopAnalysis: stopProsody, getTimeline, getStartTime: getProsodyStartTime } = useProsody();
+  const { startRecording, stopRecording, getRecording, mixAudioBlob, getStartTime: getRecordingStartTime } = useAudioRecorder();
   const { speak, stop: stopTTS, isSpeaking, availableProviders, activeProvider, setProvider, debugLog } = useTTS({ onAudioBlob: mixAudioBlob });
   const { start: startVAD, stop: stopVAD, onSilenceThreshold } = useVAD(behavior.silenceThresholdMs);
 
@@ -280,9 +280,6 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
     return () => clearInterval(interval);
   }, [continuousActive, consumeNewText, flushToChat]);
 
-  // Track when recording actually starts so we can rebase all timestamps
-  const recordingStartTimeRef = useRef(0);
-
   const startContinuousMode = useCallback(async () => {
     setContinuousActive(true);
     const goLiveTime = Date.now();
@@ -306,14 +303,13 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
 
     try { await startVAD(sharedStream || undefined); } catch (e) { console.log("[Continuous] VAD unavailable"); }
     try { await startProsody(sharedStream || undefined); } catch (e) { console.log("[Continuous] Prosody unavailable"); }
-    recordingStartTimeRef.current = Date.now();
     try { await startRecording(sharedStream || undefined); } catch (e) { console.log("[Continuous] Recording unavailable"); }
     // Start visual analysis if camera is active
     if (videoElRef.current) {
       try { await visualAnalysis.start(videoElRef.current); } catch (e) { console.log("[Continuous] Visual analysis unavailable"); }
     }
     const setupMs = Date.now() - goLiveTime;
-    console.log(`[Continuous] Started (setup took ${setupMs}ms, recording offset: ${recordingStartTimeRef.current - goLiveTime}ms)`);
+    console.log(`[Continuous] Started (setup took ${setupMs}ms)`);
   }, [startListening, startProsody, startVAD, startRecording, visualAnalysis]);
 
   const stopContinuousMode = useCallback(() => {
@@ -875,32 +871,46 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
     const sessionDuration = recordingResult.duration || elapsed;
 
     // Rebase all timestamps to use recording start as time zero.
-    // Prosody timeline uses analysisStartRef, STT uses sessionStartTimeRef,
-    // recording uses startTimeRef — compute offsets to align everything.
-    const prosodyOffset = (liveStartTimeRef.current - recordingStartTimeRef.current) / 1000;
-    // STT sessionStartTimeRef was set in startListening() before recording started,
-    // so STT timestamps need to be shifted forward by the same offset.
-    const sttOffset = prosodyOffset; // Both started before recording
+    // Each hook started at a different wall-clock time:
+    //   STT started first (startListening), then prosody, then recording (last).
+    // Recording audio time=0 corresponds to getRecordingStartTime().
+    // Prosody frame.time=X means X seconds after getProsodyStartTime().
+    // STT word.start=X means X seconds after elSTT.getStartTime().
+    // We need to convert everything to: seconds since recording started.
+    const recStart = getRecordingStartTime();
+    const prosodyStart = getProsodyStartTime();
+    const sttStart = elSTT.getStartTime();
 
-    // Rebase timeline: shift frames so time=0 aligns with recording start
+    // prosodyOffset: how many seconds prosody started BEFORE recording
+    // If prosody started 200ms before recording, prosodyOffset = -0.2
+    // So a prosody frame at t=5.0 corresponds to recording time 5.0 - 0.2 = 4.8
+    const prosodyOffsetSec = (prosodyStart - recStart) / 1000;
+    // sttOffset: how many seconds STT started BEFORE recording
+    const sttOffsetSec = (sttStart - recStart) / 1000;
+    // elapsed/chat messages use liveStartTimeRef as their zero
+    const elapsedOffsetSec = (liveStartTimeRef.current - recStart) / 1000;
+
+    console.log(`[Timing] recStart=${recStart}, prosodyStart=${prosodyStart} (${prosodyOffsetSec.toFixed(2)}s before rec), sttStart=${sttStart} (${sttOffsetSec.toFixed(2)}s before rec), liveStart=${liveStartTimeRef.current} (${elapsedOffsetSec.toFixed(2)}s before rec)`);
+
+    // Rebase timeline: convert from prosody-relative to recording-relative
     const timeline = rawTimeline.map((f) => ({
       ...f,
-      time: Math.max(0, f.time + prosodyOffset),
+      time: Math.max(0, f.time + prosodyOffsetSec),
     }));
 
-    // Rebase word timestamps
+    // Rebase word timestamps: convert from STT-relative to recording-relative
     const rebasedWordTimestamps = elSTT.wordTimestamps.length > 0
       ? elSTT.wordTimestamps.map((w) => ({
           ...w,
-          start: Math.max(0, w.start + sttOffset),
-          end: Math.max(0, w.end + sttOffset),
+          start: Math.max(0, w.start + sttOffsetSec),
+          end: Math.max(0, w.end + sttOffsetSec),
         }))
       : undefined;
 
-    // Rebase chat messages to recording time (they use elapsed which started at liveStartTimeRef)
+    // Rebase chat messages: they use elapsed seconds from liveStartTimeRef
     const rebasedChatMessages = chatMessages.map((m) => ({
       ...m,
-      time: Math.max(0, m.time + prosodyOffset),
+      time: Math.max(0, m.time + elapsedOffsetSec),
     }));
 
     const recordingData: SessionRecordingData | undefined = recordingResult.url ? {

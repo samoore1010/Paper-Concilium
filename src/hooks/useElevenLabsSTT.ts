@@ -372,5 +372,8 @@ export function useElevenLabsSTT(): UseElevenLabsSTTReturn {
     return () => { activeRef.current = false; startingRef.current = false; if (wsRef.current) wsRef.current.close(); cleanup(); };
   }, [cleanup]);
 
-  return { transcript, interimTranscript, isListening, startListening, stopListening, consumeNewText, supported, wordTimestamps, consumeNewTimestamps };
+  /** Return the epoch ms when the STT session started (for cross-hook synchronization) */
+  const getStartTime = useCallback(() => sessionStartTimeRef.current, []);
+
+  return { transcript, interimTranscript, isListening, startListening, stopListening, consumeNewText, supported, wordTimestamps, consumeNewTimestamps, getStartTime };
 }
