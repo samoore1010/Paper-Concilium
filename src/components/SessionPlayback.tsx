@@ -39,6 +39,10 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
   const [activeMetric, setActiveMetric] = useState<"volume" | "pitch" | "energy">("volume");
   const [transcriptFilter, setTranscriptFilter] = useState<TranscriptFilter>("all");
   const [transcriptFontSize, setTranscriptFontSize] = useState<"sm" | "base" | "lg">("base");
+  // Bidirectional sync: hovered time range from transcript → waveform highlight
+  const [hoveredTimeRange, setHoveredTimeRange] = useState<[number, number] | null>(null);
+  // Bidirectional sync: hovered time from waveform → transcript word highlight
+  const [waveformHoverTime, setWaveformHoverTime] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -204,6 +208,22 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
     ctx.textAlign = "left";
     ctx.fillText(labelText, badgeX + 15, badgeY + badgeH / 2 + 3.5);
 
+    // Draw hovered word highlight region (bidirectional sync from transcript)
+    if (hoveredTimeRange) {
+      const [hStart, hEnd] = hoveredTimeRange;
+      const x1 = (hStart / maxTime) * w;
+      const x2 = (hEnd / maxTime) * w;
+      ctx.fillStyle = "rgba(99, 102, 241, 0.15)";
+      ctx.fillRect(x1, 0, Math.max(x2 - x1, 3), h);
+      // Border lines
+      ctx.strokeStyle = "rgba(99, 102, 241, 0.5)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x1, 0); ctx.lineTo(x1, h);
+      ctx.moveTo(x2, 0); ctx.lineTo(x2, h);
+      ctx.stroke();
+    }
+
     // Draw playback position
     if (currentTime > 0) {
       const px = (currentTime / maxTime) * w;
@@ -220,7 +240,7 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
       ctx.arc(px, h / 2, 5, 0, Math.PI * 2);
       ctx.fill();
     }
-  }, [timeline, events, currentTime, activeMetric, duration, canvasSize]);
+  }, [timeline, events, currentTime, activeMetric, duration, canvasSize, hoveredTimeRange]);
 
   // Sync audio time to state
   useEffect(() => {
@@ -261,14 +281,29 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
     setCurrentTime(audio.currentTime);
   }, [timeline, duration]);
 
+  // Waveform hover → compute time → feed to transcript for word highlight
+  const handleWaveformHover = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const pct = x / rect.width;
+    const maxTime = timeline[timeline.length - 1]?.time || duration || 1;
+    setWaveformHoverTime(pct * maxTime);
+  }, [timeline, duration]);
+
+  const handleWaveformLeave = useCallback(() => {
+    setWaveformHoverTime(null);
+  }, []);
+
   // Find events near current playback time
   const activeEvents = events.filter((e) => Math.abs(e.time - currentTime) < 2);
 
   // Generate coaching report
   const coachingReport = useMemo(() => {
     if (timeline.length < 10) return null;
-    return generateCoachingReport(timeline, wpm, fillerCount, duration, sessionType);
-  }, [timeline, wpm, fillerCount, duration, sessionType]);
+    return generateCoachingReport(timeline, wpm, fillerCount, duration, sessionType, wordTimestamps.length > 0 ? wordTimestamps : undefined);
+  }, [timeline, wpm, fillerCount, duration, sessionType, wordTimestamps]);
 
   if (!audioUrl) {
     return (
@@ -308,6 +343,8 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
           ref={canvasRef}
           className="w-full cursor-pointer h-[180px] sm:h-[220px] md:h-[260px] lg:h-[300px]"
           onClick={seekTo}
+          onMouseMove={handleWaveformHover}
+          onMouseLeave={handleWaveformLeave}
         />
         {/* Current time / duration overlays */}
         <div className="absolute bottom-5 left-2 text-caption text-white/30 font-mono">{formatTime(currentTime)}</div>
@@ -408,6 +445,7 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
           wordTimestamps={wordTimestamps}
           timeline={timeline}
           currentTime={currentTime}
+          waveformHoverTime={waveformHoverTime}
           filter={transcriptFilter}
           fontSize={transcriptFontSize}
           onSeek={(time) => {
@@ -421,6 +459,8 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
               }
             }
           }}
+          onHoverWord={(start, end) => setHoveredTimeRange([start, end])}
+          onHoverLeave={() => setHoveredTimeRange(null)}
           onFilterChange={setTranscriptFilter}
           onFontSizeChange={setTranscriptFontSize}
           fillerCount={wordTimestamps.filter((w) => w.isFiller).length}
@@ -465,6 +505,48 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
             <CoachingCard title="Filler Words" rating={coachingReport.fillers.rating} advice={coachingReport.fillers.advice}
               stats={[{ label: "Count", value: `${coachingReport.fillers.count}` }, { label: "Per Minute", value: `${coachingReport.fillers.perMinute}` }]}
             />
+            {coachingReport.paceVariation.segments.length > 0 && (
+              <CoachingCard title="Pace Variation" rating={coachingReport.paceVariation.rating} advice={coachingReport.paceVariation.advice}
+                stats={[
+                  { label: "Range", value: `${coachingReport.paceVariation.minWpm}-${coachingReport.paceVariation.maxWpm} WPM` },
+                  { label: "Variation CV", value: `${(coachingReport.paceVariation.coefficientOfVariation * 100).toFixed(0)}%` },
+                  { label: "Rushing", value: `${coachingReport.paceVariation.rushingSegments} segments` },
+                  { label: "Dragging", value: `${coachingReport.paceVariation.draggingSegments} segments` },
+                ]}
+              />
+            )}
+            {coachingReport.energyArc.segments.length > 0 && (
+              <CoachingCard title="Energy Arc" rating={coachingReport.energyArc.rating} advice={coachingReport.energyArc.advice}
+                stats={[
+                  { label: "Shape", value: coachingReport.energyArc.arcShape.replace(/-/g, " ") },
+                  { label: "Opening", value: `${coachingReport.energyArc.openingEnergy}/100` },
+                  { label: "Closing", value: `${coachingReport.energyArc.closingEnergy}/100` },
+                  { label: "Trend", value: coachingReport.energyArc.energyTrend > 0 ? `+${coachingReport.energyArc.energyTrend} (building)` : `${coachingReport.energyArc.energyTrend} (fading)` },
+                ]}
+              />
+            )}
+            {coachingReport.energyArc.idealArc && (
+              <div className="md:col-span-2 rounded-xl border border-white/5 bg-surface-raised p-4">
+                <h4 className="text-xs font-semibold text-white/80 mb-2">Ideal Arc for {sessionType.replace(/-/g, " ")}</h4>
+                <p className="text-label text-white/50 leading-relaxed">{coachingReport.energyArc.idealArc}</p>
+                {/* Mini energy arc visualization */}
+                {coachingReport.energyArc.segments.length > 0 && (
+                  <div className="mt-3 flex items-end gap-1 h-16">
+                    {coachingReport.energyArc.segments.map((seg, i) => (
+                      <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                        <div
+                          className={`w-full rounded-t transition-all ${
+                            i === coachingReport.energyArc.peakSegment ? "bg-emerald-500/60" : "bg-indigo-500/40"
+                          }`}
+                          style={{ height: `${Math.max(4, (seg.averageEnergy / 100) * 56)}px` }}
+                        />
+                        <span className="text-caption text-white/30 truncate w-full text-center">{seg.label.split("-")[0]}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -512,9 +594,12 @@ function InteractiveTranscript({
   wordTimestamps,
   timeline,
   currentTime,
+  waveformHoverTime,
   filter,
   fontSize,
   onSeek,
+  onHoverWord,
+  onHoverLeave,
   onFilterChange,
   onFontSizeChange,
   fillerCount,
@@ -522,9 +607,12 @@ function InteractiveTranscript({
   wordTimestamps: WordTimestamp[];
   timeline: ProsodyFrame[];
   currentTime: number;
+  waveformHoverTime: number | null;
   filter: TranscriptFilter;
   fontSize: "sm" | "base" | "lg";
   onSeek: (time: number) => void;
+  onHoverWord: (start: number, end: number) => void;
+  onHoverLeave: () => void;
   onFilterChange: (f: TranscriptFilter) => void;
   onFontSizeChange: (s: "sm" | "base" | "lg") => void;
   fillerCount: number;
@@ -642,6 +730,8 @@ function InteractiveTranscript({
         <p className={`${fontSizeClass} text-white/70 leading-loose`}>
           {wordTimestamps.map((w, idx) => {
             const isCurrent = currentTime >= w.start && currentTime <= w.end + 0.3;
+            // Bidirectional: is the waveform hovering over this word?
+            const isWaveformHovered = waveformHoverTime !== null && waveformHoverTime >= w.start && waveformHoverTime <= w.end + 0.3;
             const tags = wordAnnotations.get(idx);
             const isFiller = tags?.has("filler");
             const isQuiet = tags?.has("quiet");
@@ -649,29 +739,33 @@ function InteractiveTranscript({
             const isFiltered = filter !== "all" && shouldHighlight(idx);
 
             // Determine styling
-            let className = "cursor-pointer rounded px-0.5 transition-all duration-150 ";
-            if (isCurrent) {
-              className += "bg-blue-500/30 text-white font-medium ";
+            let cls = "cursor-pointer rounded px-0.5 transition-all duration-150 ";
+            if (isWaveformHovered) {
+              cls += "bg-indigo-500/30 text-white ring-1 ring-indigo-400/50 font-medium ";
+            } else if (isCurrent) {
+              cls += "bg-blue-500/30 text-white font-medium ";
             } else if (isFiltered || (filter === "all" && isFiller)) {
               if (isFiller) {
-                className += "bg-orange-500/20 text-orange-300 underline decoration-orange-400/40 decoration-wavy ";
+                cls += "bg-orange-500/20 text-orange-300 underline decoration-orange-400/40 decoration-wavy ";
               } else if (isQuiet) {
-                className += "bg-red-500/15 text-red-300/80 ";
+                cls += "bg-red-500/15 text-red-300/80 ";
               } else if (isMonotone) {
-                className += "bg-gray-500/15 text-gray-400 ";
+                cls += "bg-gray-500/15 text-gray-400 ";
               }
             } else if (filter !== "all" && !isFiltered) {
-              className += "text-white/25 "; // dim non-matching words
+              cls += "text-white/25 "; // dim non-matching words
             }
 
             // Add hover effect
-            className += "hover:bg-white/10 ";
+            cls += "hover:bg-white/10 ";
 
             return (
               <span
                 key={idx}
                 onClick={() => onSeek(Math.max(0, w.start - 0.5))}
-                className={className}
+                onMouseEnter={() => onHoverWord(w.start, w.end)}
+                onMouseLeave={onHoverLeave}
+                className={cls}
                 title={[
                   `${formatTimeCompact(w.start)}`,
                   isFiller ? "Filler word" : "",
