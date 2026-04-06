@@ -173,5 +173,8 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     };
   }, []);
 
-  return { isRecording, startRecording, stopRecording, getRecording, mixAudioBlob };
+  /** Return the epoch ms when recording started (for cross-hook synchronization) */
+  const getStartTime = useCallback(() => startTimeRef.current, []);
+
+  return { isRecording, startRecording, stopRecording, getRecording, mixAudioBlob, getStartTime };
 }
