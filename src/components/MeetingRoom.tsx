@@ -168,7 +168,8 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
   const lastCommitTimeRef = useRef(0);       // when last committed chunk arrived
   const lastInterimSnapshotRef = useRef(""); // tracks interim changes
   const interimStableSinceRef = useRef(0);   // when interim stopped changing
-  const totalCharsSentRef = useRef(0);       // tracks position in full transcript
+  const charsFlushedRef = useRef(0);         // total chars flushed to chat (sync counter)
+  const flushedInterimRef = useRef("");      // last interim text that was flushed (hides from bottom bar)
 
   const flushToChat = useCallback((text: string, source: string) => {
     const trimmed = text.trim();
@@ -199,7 +200,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
     lastCommitTimeRef.current = 0;
     lastInterimSnapshotRef.current = "";
     interimStableSinceRef.current = Date.now();
-    totalCharsSentRef.current = 0;
+    charsFlushedRef.current = 0;
     lastPublishedRef.current = "";
 
     const interval = setInterval(() => {
@@ -207,20 +208,21 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
 
       const now = Date.now();
 
-      // ── Tier 1: Committed text with 1000ms coalescing window ──
+      // ── Tier 1: Committed text with coalescing window ──
       const committed = consumeNewText();
       if (committed.length > 0) {
         coalesceBufferRef.current += (coalesceBufferRef.current ? " " : "") + committed;
         lastCommitTimeRef.current = now;
-        // Update position tracking
-        totalCharsSentRef.current = speechTranscriptRef.current.trim().length;
         return; // Wait for coalescing window before sending
       }
 
       // If we have buffered committed text and 500ms passed since last commit → flush
       if (coalesceBufferRef.current.length > 0 && (now - lastCommitTimeRef.current) >= 500) {
-        flushToChat(coalesceBufferRef.current, "committed");
+        const buf = coalesceBufferRef.current;
         coalesceBufferRef.current = "";
+        flushToChat(buf, "committed");
+        charsFlushedRef.current += buf.length;
+        flushedInterimRef.current = ""; // committed text supersedes — re-show interim
         // Reset interim tracking since committed text supersedes it
         lastInterimSnapshotRef.current = interimRef.current;
         interimStableSinceRef.current = now;
@@ -239,14 +241,19 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
         return;
       }
 
-      // Interim stable for 1.5s and has unsent content → send
+      // Interim stable for 1.5s and has meaningful unsent content → send
+      // Use charsFlushedRef (sync counter) instead of speechTranscriptRef
+      // (async React state) to avoid race where stale state under-counts
+      // what was already flushed, causing the full transcript to re-send.
       const stableMs = now - interimStableSinceRef.current;
-      const fullText = (speechTranscriptRef.current + (interim ? " " + interim : "")).trim();
-      if (interim.length > 0 && fullText.length > totalCharsSentRef.current && stableMs >= 1500) {
-        const newPortion = fullText.substring(totalCharsSentRef.current).trim();
-        if (newPortion.length > 0) {
-          flushToChat(newPortion, `stable-interim(${stableMs}ms)`);
-          totalCharsSentRef.current = fullText.length;
+      if (interim.length > 0 && stableMs >= 1500) {
+        // Only send the interim itself, not the full transcript — committed
+        // text is handled exclusively by Tier 1. This prevents any overlap.
+        const trimmedInterim = interim.trim();
+        if (trimmedInterim.length > 0) {
+          flushToChat(trimmedInterim, `stable-interim(${stableMs}ms)`);
+          charsFlushedRef.current += trimmedInterim.length;
+          flushedInterimRef.current = interim; // hide from bottom bar until new speech
           consumeNewText(); // keep STT hook pointer in sync
           // Reset interim tracking
           lastInterimSnapshotRef.current = "";
@@ -807,6 +814,11 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
 
   const fmt = (s: number) => `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 
+  // Hide interim text from UI once it's been flushed to chat (Tier 2).
+  // When new speech arrives, interimTranscript changes and no longer matches → shows again.
+  const visibleInterim = interimTranscript && interimTranscript !== flushedInterimRef.current
+    ? interimTranscript : "";
+
   const audienceTiles = personas.map((persona) => {
     const state = personaStates[persona.id] || { reaction: "neutral" as ReactionType };
     return (
@@ -1003,7 +1015,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
               availableProviders={availableProviders} activeProvider={activeProvider} onProviderChange={setProvider}
               onDismiss={(id) => setQuestionQueue((prev) => prev.filter((q) => q.id !== id))}
               onToggleTTS={() => setTtsEnabled(!ttsEnabled)}
-              continuousActive={continuousActive} interimTranscript={interimTranscript}
+              continuousActive={continuousActive} interimTranscript={visibleInterim}
             />
           </div>
         </div>
@@ -1056,7 +1068,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
                     onListen={handleListenToQuestion} onRead={handleReadQuestion}
                     onDismiss={(id) => setQuestionQueue((prev) => prev.filter((q) => q.id !== id))}
                     onToggleTTS={() => setTtsEnabled(!ttsEnabled)}
-                    continuousActive={continuousActive} interimTranscript={interimTranscript}
+                    continuousActive={continuousActive} interimTranscript={visibleInterim}
                   />
                 </div>
               </motion.div>
@@ -1072,8 +1084,8 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
               <div className="px-3 py-3 flex items-center gap-3">
                 <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
                 <span className="text-sm text-white/40 truncate flex-1">
-                  {interimTranscript ? (
-                    <span className="text-white/60 italic">{interimTranscript}</span>
+                  {visibleInterim ? (
+                    <span className="text-white/60 italic">{visibleInterim}</span>
                   ) : "Listening..."}
                 </span>
                 <button
@@ -1134,8 +1146,8 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
               <div className="px-3 py-1 border-b border-white/5 flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
                 <span className="text-label text-white/40 truncate flex-1">
-                  {interimTranscript ? (
-                    <span className="text-white/60 italic">{interimTranscript}</span>
+                  {visibleInterim ? (
+                    <span className="text-white/60 italic">{visibleInterim}</span>
                   ) : "Listening..."}
                 </span>
                 <button

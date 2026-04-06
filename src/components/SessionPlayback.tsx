@@ -10,18 +10,25 @@ export interface SessionEvent {
   severity: "info" | "warning" | "good";
 }
 
+export interface ChatMessage {
+  from: string;
+  text: string;
+  time: number; // seconds from session start
+}
+
 interface SessionPlaybackProps {
   audioUrl: string;
   duration: number;
   timeline: ProsodyFrame[];
   events: SessionEvent[];
   transcript: string;
+  chatMessages?: ChatMessage[];
   wpm?: number;
   fillerCount?: number;
   sessionType?: string;
 }
 
-export function SessionPlayback({ audioUrl, duration, timeline, events, transcript, wpm = 0, fillerCount = 0, sessionType = "business-pitch" }: SessionPlaybackProps) {
+export function SessionPlayback({ audioUrl, duration, timeline, events, transcript, chatMessages = [], wpm = 0, fillerCount = 0, sessionType = "business-pitch" }: SessionPlaybackProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -34,6 +41,16 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
 
   // Reserve space at bottom of canvas for time axis labels
   const TIME_AXIS_HEIGHT = 18;
+
+  // Redraw canvas on resize
+  const [canvasSize, setCanvasSize] = useState(0); // triggers redraw
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const ro = new ResizeObserver(() => setCanvasSize((n) => n + 1));
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, []);
 
   // Draw the waveform/prosody graph
   useEffect(() => {
@@ -197,7 +214,7 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
       ctx.arc(px, h / 2, 5, 0, Math.PI * 2);
       ctx.fill();
     }
-  }, [timeline, events, currentTime, activeMetric, duration]);
+  }, [timeline, events, currentTime, activeMetric, duration, canvasSize]);
 
   // Sync audio time to state
   useEffect(() => {
@@ -283,7 +300,7 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
       <div ref={containerRef} className="relative rounded-lg bg-surface-raised border border-white/5 overflow-hidden">
         <canvas
           ref={canvasRef}
-          className="w-full cursor-pointer h-[138px] sm:h-[198px] md:h-[218px]"
+          className="w-full cursor-pointer h-[180px] sm:h-[220px] md:h-[260px] lg:h-[300px]"
           onClick={seekTo}
         />
         {/* Current time / duration overlays */}
@@ -341,6 +358,37 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
                   <span className="text-xs">{icons[evt.type] || "📌"}</span>
                   <span className="text-white/30 font-mono text-caption w-10">{formatTime(evt.time)}</span>
                   <span className={colors[evt.severity]}>{evt.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Session Chat Log */}
+      {chatMessages.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-caption text-white/40 uppercase tracking-wider">Session Chat Log</div>
+          <div className="max-h-[300px] overflow-y-auto scroll-touch space-y-0.5 rounded-lg bg-surface-raised border border-white/5 p-2">
+            {chatMessages.map((msg, i) => {
+              const isYou = msg.from === "You";
+              const isActive = Math.abs(msg.time - currentTime) < 2;
+              return (
+                <button
+                  key={i}
+                  onClick={() => {
+                    if (audioRef.current) {
+                      audioRef.current.currentTime = msg.time;
+                      setCurrentTime(msg.time);
+                    }
+                  }}
+                  className={`w-full text-left flex items-start gap-2 px-2 py-1.5 rounded text-label transition-colors ${
+                    isActive ? "bg-white/10" : "hover:bg-surface-overlay"
+                  }`}
+                >
+                  <span className="text-white/30 font-mono text-caption w-10 flex-shrink-0 pt-0.5">{formatTime(msg.time)}</span>
+                  <span className={`font-medium flex-shrink-0 ${isYou ? "text-blue-400" : "text-amber-400"}`}>{msg.from}:</span>
+                  <span className="text-white/60 break-words">{msg.text}</span>
                 </button>
               );
             })}
