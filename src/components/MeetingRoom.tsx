@@ -29,6 +29,7 @@ export interface SessionRecordingData {
   duration: number;
   timeline: import("../hooks/useProsody").ProsodyFrame[];
   chatMessages: { from: string; text: string; time: number }[];
+  wordTimestamps?: import("../hooks/useElevenLabsSTT").WordTimestamp[];
 }
 
 interface MeetingRoomProps {
@@ -149,7 +150,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
   const stopListening = useElSTT ? elSTT.stopListening : webSpeech.stopListening;
   const consumeNewText = useElSTT ? elSTT.consumeNewText : webSpeech.consumeNewText;
   const { metrics: speechMetrics, updateMetrics } = useSpeechMetrics();
-  const { metrics: prosodyMetrics, isAnalyzing: isProsodyActive, startAnalysis: startProsody, stopAnalysis: stopProsody, getTimeline } = useProsody();
+  const { metrics: prosodyMetrics, isAnalyzing: isProsodyActive, calibration: prosodyCalibration, startAnalysis: startProsody, stopAnalysis: stopProsody, getTimeline } = useProsody();
   const { startRecording, stopRecording, getRecording, mixAudioBlob } = useAudioRecorder();
   const { speak, stop: stopTTS, isSpeaking, availableProviders, activeProvider, setProvider, debugLog } = useTTS({ onAudioBlob: mixAudioBlob });
   const { start: startVAD, stop: stopVAD, onSilenceThreshold } = useVAD(behavior.silenceThresholdMs);
@@ -855,6 +856,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
       duration: sessionDuration,
       timeline,
       chatMessages: [...chatMessages],
+      wordTimestamps: elSTT.wordTimestamps.length > 0 ? [...elSTT.wordTimestamps] : undefined,
     } : undefined;
 
     onEndSession(feedback, ft, recordingData);

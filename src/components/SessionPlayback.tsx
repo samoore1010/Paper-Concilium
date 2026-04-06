@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Play, Pause } from "lucide-react";
 import { ProsodyFrame } from "../hooks/useProsody";
+import { WordTimestamp } from "../hooks/useElevenLabsSTT";
 import { generateCoachingReport, CoachingReport } from "../data/prosodyAnalysis";
 
 export interface SessionEvent {
@@ -16,6 +17,8 @@ export interface ChatMessage {
   time: number; // seconds from session start
 }
 
+type TranscriptFilter = "all" | "fillers" | "volume-drops" | "monotone";
+
 interface SessionPlaybackProps {
   audioUrl: string;
   duration: number;
@@ -26,13 +29,16 @@ interface SessionPlaybackProps {
   wpm?: number;
   fillerCount?: number;
   sessionType?: string;
+  wordTimestamps?: WordTimestamp[];
 }
 
-export function SessionPlayback({ audioUrl, duration, timeline, events, transcript, chatMessages = [], wpm = 0, fillerCount = 0, sessionType = "business-pitch" }: SessionPlaybackProps) {
+export function SessionPlayback({ audioUrl, duration, timeline, events, transcript, chatMessages = [], wpm = 0, fillerCount = 0, sessionType = "business-pitch", wordTimestamps = [] }: SessionPlaybackProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [activeMetric, setActiveMetric] = useState<"volume" | "pitch" | "energy">("volume");
+  const [transcriptFilter, setTranscriptFilter] = useState<TranscriptFilter>("all");
+  const [transcriptFontSize, setTranscriptFontSize] = useState<"sm" | "base" | "lg">("base");
   const audioRef = useRef<HTMLAudioElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -396,6 +402,31 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
         </div>
       )}
 
+      {/* Interactive Transcript with Word-Level Highlights */}
+      {wordTimestamps.length > 0 && (
+        <InteractiveTranscript
+          wordTimestamps={wordTimestamps}
+          timeline={timeline}
+          currentTime={currentTime}
+          filter={transcriptFilter}
+          fontSize={transcriptFontSize}
+          onSeek={(time) => {
+            if (audioRef.current) {
+              audioRef.current.currentTime = time;
+              setCurrentTime(time);
+              if (!isPlaying) {
+                audioRef.current.playbackRate = playbackSpeed;
+                audioRef.current.play();
+                setIsPlaying(true);
+              }
+            }
+          }}
+          onFilterChange={setTranscriptFilter}
+          onFontSizeChange={setTranscriptFontSize}
+          fillerCount={wordTimestamps.filter((w) => w.isFiller).length}
+        />
+      )}
+
       {/* Coaching Report */}
       {coachingReport && (
         <div className="space-y-4 mt-6 pt-6 border-t border-white/5">
@@ -473,6 +504,199 @@ function CoachingCard({ title, rating, advice, stats, className }: {
       </div>
     </div>
   );
+}
+
+// === Interactive Transcript Component ===
+
+function InteractiveTranscript({
+  wordTimestamps,
+  timeline,
+  currentTime,
+  filter,
+  fontSize,
+  onSeek,
+  onFilterChange,
+  onFontSizeChange,
+  fillerCount,
+}: {
+  wordTimestamps: WordTimestamp[];
+  timeline: ProsodyFrame[];
+  currentTime: number;
+  filter: TranscriptFilter;
+  fontSize: "sm" | "base" | "lg";
+  onSeek: (time: number) => void;
+  onFilterChange: (f: TranscriptFilter) => void;
+  onFontSizeChange: (s: "sm" | "base" | "lg") => void;
+  fillerCount: number;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Find volume drops and monotone stretches from timeline for word-level annotation
+  const wordAnnotations = useMemo(() => {
+    const annotations = new Map<number, Set<string>>(); // wordIndex → set of annotation types
+
+    // Map each word to its prosody context
+    wordTimestamps.forEach((w, idx) => {
+      const tags = new Set<string>();
+
+      if (w.isFiller) tags.add("filler");
+
+      // Find timeline frames overlapping this word's time range
+      const wordFrames = timeline.filter((f) => f.time >= w.start && f.time <= w.end + 0.1);
+      if (wordFrames.length > 0) {
+        const avgVol = wordFrames.reduce((s, f) => s + f.volume, 0) / wordFrames.length;
+        if (avgVol < 20 && avgVol > 0) tags.add("quiet");
+
+        // Check if word is in a monotone stretch
+        const nearbyFrames = timeline.filter((f) => Math.abs(f.time - w.start) < 2.5);
+        const pitches = nearbyFrames.filter((f) => f.pitch > 50).map((f) => f.pitch);
+        if (pitches.length > 5) {
+          const avg = pitches.reduce((a, b) => a + b, 0) / pitches.length;
+          const std = Math.sqrt(pitches.reduce((s, p) => s + (p - avg) ** 2, 0) / pitches.length);
+          if (std < 10) tags.add("monotone");
+        }
+      }
+
+      if (tags.size > 0) annotations.set(idx, tags);
+    });
+
+    return annotations;
+  }, [wordTimestamps, timeline]);
+
+  // Count annotations for filter badges
+  const quietCount = useMemo(() => {
+    let c = 0;
+    wordAnnotations.forEach((tags) => { if (tags.has("quiet")) c++; });
+    return c;
+  }, [wordAnnotations]);
+  const monotoneCount = useMemo(() => {
+    let c = 0;
+    wordAnnotations.forEach((tags) => { if (tags.has("monotone")) c++; });
+    return c;
+  }, [wordAnnotations]);
+
+  // Filter words based on active filter
+  const shouldHighlight = useCallback((idx: number): boolean => {
+    if (filter === "all") return false;
+    const tags = wordAnnotations.get(idx);
+    if (!tags) return false;
+    if (filter === "fillers") return tags.has("filler");
+    if (filter === "volume-drops") return tags.has("quiet");
+    if (filter === "monotone") return tags.has("monotone");
+    return false;
+  }, [filter, wordAnnotations]);
+
+  const fontSizeClass = fontSize === "sm" ? "text-xs" : fontSize === "lg" ? "text-base" : "text-sm";
+
+  return (
+    <div className="space-y-2">
+      {/* Header with filter buttons and font size */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="text-caption text-white/40 uppercase tracking-wider">Interactive Transcript</div>
+        <div className="flex items-center gap-1.5">
+          {/* Font size controls */}
+          <span className="text-caption text-white/20 mr-1">A</span>
+          {(["sm", "base", "lg"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => onFontSizeChange(s)}
+              className={`text-caption px-1.5 py-0.5 rounded transition-colors ${
+                fontSize === s ? "bg-white/10 text-white/70" : "bg-white/5 text-white/30 hover:text-white/50"
+              }`}
+            >
+              {s === "sm" ? "A" : s === "base" ? "A+" : "A++"}
+            </button>
+          ))}
+          <span className="text-white/10 mx-1">|</span>
+        </div>
+      </div>
+
+      {/* Filter pills */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {([
+          { key: "all" as const, label: "All", color: "bg-white/5 text-white/50", activeColor: "bg-white/15 text-white/80", count: wordTimestamps.length },
+          { key: "fillers" as const, label: "Filler Words", color: "bg-orange-500/10 text-orange-300/50", activeColor: "bg-orange-500/20 text-orange-300", count: fillerCount },
+          { key: "volume-drops" as const, label: "Quiet Moments", color: "bg-red-500/10 text-red-300/50", activeColor: "bg-red-500/20 text-red-300", count: quietCount },
+          { key: "monotone" as const, label: "Monotone", color: "bg-gray-500/10 text-gray-300/50", activeColor: "bg-gray-500/20 text-gray-300", count: monotoneCount },
+        ]).map((f) => (
+          <button
+            key={f.key}
+            onClick={() => onFilterChange(f.key)}
+            className={`text-caption px-2 py-1 rounded-full transition-colors flex items-center gap-1.5 ${
+              filter === f.key ? f.activeColor : f.color
+            }`}
+          >
+            {f.label}
+            {f.count > 0 && f.key !== "all" && (
+              <span className="bg-black/30 px-1.5 rounded-full text-caption font-medium">{f.count}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Transcript body */}
+      <div
+        ref={scrollRef}
+        className="max-h-[350px] overflow-y-auto scroll-touch rounded-lg bg-surface-raised border border-white/5 p-4 leading-relaxed"
+      >
+        <p className={`${fontSizeClass} text-white/70 leading-loose`}>
+          {wordTimestamps.map((w, idx) => {
+            const isCurrent = currentTime >= w.start && currentTime <= w.end + 0.3;
+            const tags = wordAnnotations.get(idx);
+            const isFiller = tags?.has("filler");
+            const isQuiet = tags?.has("quiet");
+            const isMonotone = tags?.has("monotone");
+            const isFiltered = filter !== "all" && shouldHighlight(idx);
+
+            // Determine styling
+            let className = "cursor-pointer rounded px-0.5 transition-all duration-150 ";
+            if (isCurrent) {
+              className += "bg-blue-500/30 text-white font-medium ";
+            } else if (isFiltered || (filter === "all" && isFiller)) {
+              if (isFiller) {
+                className += "bg-orange-500/20 text-orange-300 underline decoration-orange-400/40 decoration-wavy ";
+              } else if (isQuiet) {
+                className += "bg-red-500/15 text-red-300/80 ";
+              } else if (isMonotone) {
+                className += "bg-gray-500/15 text-gray-400 ";
+              }
+            } else if (filter !== "all" && !isFiltered) {
+              className += "text-white/25 "; // dim non-matching words
+            }
+
+            // Add hover effect
+            className += "hover:bg-white/10 ";
+
+            return (
+              <span
+                key={idx}
+                onClick={() => onSeek(Math.max(0, w.start - 0.5))}
+                className={className}
+                title={[
+                  `${formatTimeCompact(w.start)}`,
+                  isFiller ? "Filler word" : "",
+                  isQuiet ? "Low volume" : "",
+                  isMonotone ? "Monotone delivery" : "",
+                ].filter(Boolean).join(" · ")}
+              >
+                {w.word}{" "}
+              </span>
+            );
+          })}
+        </p>
+      </div>
+
+      {filter !== "all" && (
+        <p className="text-caption text-white/30 italic">
+          Click any highlighted word to jump to that moment in the recording.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function formatTimeCompact(s: number): string {
+  return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
 }
 
 // Generate events from prosody timeline and speech metrics
