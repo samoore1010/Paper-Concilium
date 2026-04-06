@@ -287,7 +287,7 @@ export function useElevenLabsSTT(): UseElevenLabsSTTReturn {
                 // Estimate ~0.3s per word, spread backward from current time
                 const wordDuration = 0.3;
                 const phraseStart = Math.max(0, sessionElapsed - wordList.length * wordDuration);
-                const newTimestamps: WordTimestamp[] = wordList.map((w, i) => ({
+                const newTimestamps: WordTimestamp[] = wordList.map((w: string, i: number) => ({
                   word: w,
                   start: phraseStart + i * wordDuration,
                   end: phraseStart + (i + 1) * wordDuration,
