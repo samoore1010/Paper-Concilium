@@ -19,6 +19,9 @@ import {
   Tag,
   Brain,
   ChevronRight,
+  Upload,
+  FileText,
+  X,
 } from "lucide-react";
 import {
   AppSettings,
@@ -29,6 +32,7 @@ import {
 import { getSessionHistory, clearHistory } from "../data/sessionHistory";
 import { PERSONA_LIBRARY, PERSONA_PACKS, Persona } from "../data/personas";
 import { ELEVENLABS_DEFAULT_VOICES } from "../data/voiceConfig";
+import { useServerConfig } from "../hooks/useServerConfig";
 import { MiiAvatar } from "./MiiAvatar";
 
 // ============================================================
@@ -535,56 +539,27 @@ const PACK_LABELS: Record<string, string> = {
 };
 
 function CharacterNamesPanel({ showToast }: { showToast: (msg: string) => void }) {
-  const [customNames, setCustomNames] = useState<Record<string, string>>({});
-  const [edits, setEdits] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/admin/character-config")
-      .then((r) => r.json())
-      .then((data: { names: Record<string, string> }) => {
-        setCustomNames(data.names || {});
-        setEdits(data.names || {});
-      })
-      .catch(() => showToast("Failed to load character names"))
-      .finally(() => setLoading(false));
-  }, [showToast]);
+  const { edits, setEdits, loading, saving, saved, dirty, save } = useServerConfig<Record<string, string>>({
+    getUrl: "/api/admin/character-config",
+    putUrl: "/api/admin/character-config",
+    extract: (data) => (data as { names?: Record<string, string> }).names || {},
+    wrap: (names) => ({ names }),
+    onError: (msg) => showToast(msg),
+  });
 
   const handleSave = async () => {
-    setSaving(true);
-    try {
-      const res = await fetch("/api/admin/character-config", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ names: edits }),
-      });
-      if (!res.ok) throw new Error("Save failed");
-      setCustomNames({ ...edits });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-      showToast("Character names saved");
-    } catch {
-      showToast("Failed to save character names");
-    } finally {
-      setSaving(false);
-    }
+    if (await save()) showToast("Character names saved");
   };
 
   const updateName = (personaId: string, name: string) => {
-    setEdits((prev) => {
-      const next = { ...prev };
-      if (name.trim()) {
-        next[personaId] = name;
-      } else {
-        delete next[personaId];
-      }
-      return next;
-    });
+    if (!edits) return;
+    const next = { ...edits };
+    if (name.trim()) next[personaId] = name;
+    else delete next[personaId];
+    setEdits(next);
   };
 
-  const hasChanges = JSON.stringify(edits) !== JSON.stringify(customNames);
+  const hasChanges = dirty;
 
   const grouped = PERSONA_PACKS.map((pack) => ({
     pack,
@@ -622,7 +597,7 @@ function CharacterNamesPanel({ showToast }: { showToast: (msg: string) => void }
                     </div>
                     <input
                       type="text"
-                      value={edits[persona.id] || ""}
+                      value={edits?.[persona.id] || ""}
                       onChange={(e) => updateName(persona.id, e.target.value)}
                       placeholder={persona.name}
                       className="flex-1 min-w-0 bg-surface-overlay border border-white/5 rounded-lg px-2.5 py-1.5 text-label text-white/70 placeholder:text-white/25 focus:outline-none focus:border-violet-500/50"
@@ -658,61 +633,35 @@ function CharacterNamesPanel({ showToast }: { showToast: (msg: string) => void }
 }
 
 function VoiceConfigPanel({ showToast }: { showToast: (msg: string) => void }) {
-  const [savedConfig, setSavedConfig] = useState<Record<string, string>>({});
-  const [edits, setEdits] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/admin/voice-config")
-      .then((r) => r.json())
-      .then((data: { custom: Record<string, string> }) => {
-        const custom = data.custom || {};
-        setSavedConfig(custom);
-        setEdits(custom);
-      })
-      .catch(() => showToast("Failed to load voice config"))
-      .finally(() => setLoading(false));
-  }, [showToast]);
+  const { edits, setEdits, loading, saving, saved, dirty, save } = useServerConfig<Record<string, string>>({
+    getUrl: "/api/admin/voice-config",
+    putUrl: "/api/admin/voice-config",
+    extract: (data) => (data as { custom?: Record<string, string> }).custom || {},
+    wrap: (config) => {
+      // Strip empty values before sending — the server also cleans but we
+      // want the local "dirty" check to match what lives server-side.
+      const cleaned: Record<string, string> = {};
+      for (const [key, value] of Object.entries(config)) {
+        if (value.trim()) cleaned[key] = value.trim();
+      }
+      return { config: cleaned };
+    },
+    onError: (msg) => showToast(msg),
+  });
 
   const handleSave = async () => {
-    const cleaned: Record<string, string> = {};
-    for (const [key, value] of Object.entries(edits)) {
-      if (value.trim()) cleaned[key] = value.trim();
-    }
-    setSaving(true);
-    try {
-      const res = await fetch("/api/admin/voice-config", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ config: cleaned }),
-      });
-      if (!res.ok) throw new Error("Save failed");
-      setSavedConfig(cleaned);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-      showToast("Voice configuration saved");
-    } catch {
-      showToast("Failed to save voice config");
-    } finally {
-      setSaving(false);
-    }
+    if (await save()) showToast("Voice configuration saved");
   };
 
   const updateVoiceId = (personaId: string, voiceId: string) => {
-    setEdits((prev) => {
-      const next = { ...prev };
-      if (voiceId.trim()) {
-        next[personaId] = voiceId;
-      } else {
-        delete next[personaId];
-      }
-      return next;
-    });
+    if (!edits) return;
+    const next = { ...edits };
+    if (voiceId.trim()) next[personaId] = voiceId;
+    else delete next[personaId];
+    setEdits(next);
   };
 
-  const hasChanges = JSON.stringify(edits) !== JSON.stringify(savedConfig);
+  const hasChanges = dirty;
 
   // Group personas by pack
   const grouped = PERSONA_PACKS.map((pack) => ({
@@ -747,7 +696,7 @@ function VoiceConfigPanel({ showToast }: { showToast: (msg: string) => void }) {
                     key={persona.id}
                     persona={persona}
                     defaultVoiceId={ELEVENLABS_DEFAULT_VOICES[persona.id]}
-                    customVoiceId={edits[persona.id] || ""}
+                    customVoiceId={edits?.[persona.id] || ""}
                     onChange={(v) => updateVoiceId(persona.id, v)}
                     showToast={showToast}
                   />
@@ -911,6 +860,13 @@ function VoiceConfigRow({
 // write to the $CONFIG_DATA_DIR/characters/{id}/ volume on Railway, so they
 // persist across redeploys without a commit.
 
+interface KnowledgeFileMeta {
+  filename: string;
+  originalName: string;
+  byteSize: number;
+  addedAt: string;
+}
+
 interface CharacterBrain {
   id: string;
   definition: {
@@ -939,6 +895,7 @@ interface CharacterBrain {
     voice: { voiceId?: string; speakingPace: string; prosodyDescription: string };
   };
   notes: string;
+  knowledge: KnowledgeFileMeta[];
 }
 
 function CharacterStudioPanel({ showToast }: { showToast: (msg: string) => void }) {
@@ -962,6 +919,10 @@ function CharacterStudioPanel({ showToast }: { showToast: (msg: string) => void 
     });
     if (!res.ok) throw new Error("Save failed");
     setBrains((prev) => prev.map((b) => (b.id === id ? updated : b)));
+  };
+
+  const handleKnowledgeChange = (id: string, knowledge: KnowledgeFileMeta[]) => {
+    setBrains((prev) => prev.map((b) => (b.id === id ? { ...b, knowledge } : b)));
   };
 
   const grouped = PERSONA_PACKS.map((pack) => ({
@@ -1023,6 +984,7 @@ function CharacterStudioPanel({ showToast }: { showToast: (msg: string) => void 
                         <CharacterBrainEditor
                           brain={brain}
                           onSave={handleSave}
+                          onKnowledgeChange={handleKnowledgeChange}
                           showToast={showToast}
                         />
                       )}
@@ -1041,10 +1003,12 @@ function CharacterStudioPanel({ showToast }: { showToast: (msg: string) => void 
 function CharacterBrainEditor({
   brain,
   onSave,
+  onKnowledgeChange,
   showToast,
 }: {
   brain: CharacterBrain;
   onSave: (id: string, updated: CharacterBrain) => Promise<void>;
+  onKnowledgeChange: (id: string, knowledge: KnowledgeFileMeta[]) => void;
   showToast: (msg: string) => void;
 }) {
   const [draft, setDraft] = useState<CharacterBrain>(brain);
@@ -1193,6 +1157,15 @@ function CharacterBrainEditor({
         />
       </BrainField>
 
+      <BrainField label="Knowledge files (PDF, DOCX, PPTX, TXT, MD — appended to prompt when relevant)">
+        <KnowledgeManager
+          characterId={brain.id}
+          files={brain.knowledge}
+          onChange={(next) => onKnowledgeChange(brain.id, next)}
+          showToast={showToast}
+        />
+      </BrainField>
+
       <div className="flex justify-end pt-1">
         <button
           type="button"
@@ -1246,4 +1219,144 @@ function ListEditor({ items, onChange }: { items: string[]; onChange: (v: string
       className={brainInputClass}
     />
   );
+}
+
+function KnowledgeManager({
+  characterId,
+  files,
+  onChange,
+  showToast,
+}: {
+  characterId: string;
+  files: KnowledgeFileMeta[];
+  onChange: (next: KnowledgeFileMeta[]) => void;
+  showToast: (msg: string) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  const handleUpload = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    const formData = new FormData();
+    for (const f of Array.from(fileList)) formData.append("files", f);
+
+    setUploading(true);
+    try {
+      const res = await fetch(`/api/admin/characters/${characterId}/knowledge`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data?.error || "Upload failed");
+        return;
+      }
+      if (Array.isArray(data.errors) && data.errors.length > 0) {
+        showToast(`${data.errors.length} file(s) failed — ${data.errors[0].error}`);
+      } else {
+        showToast(`Added ${data.added?.length || 0} knowledge file(s)`);
+      }
+      if (Array.isArray(data.knowledge)) onChange(data.knowledge);
+    } catch (err) {
+      showToast(`Upload error: ${(err as Error).message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDelete = async (filename: string) => {
+    setDeleting(filename);
+    try {
+      const res = await fetch(
+        `/api/admin/characters/${characterId}/knowledge/${encodeURIComponent(filename)}`,
+        { method: "DELETE" },
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data?.error || "Delete failed");
+        return;
+      }
+      if (Array.isArray(data.knowledge)) onChange(data.knowledge);
+      showToast("Knowledge file removed");
+    } catch (err) {
+      showToast(`Delete error: ${(err as Error).message}`);
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      {files.length === 0 ? (
+        <p className="text-xs text-white/30 italic">No knowledge files uploaded yet.</p>
+      ) : (
+        <ul className="space-y-1">
+          {files.map((f) => (
+            <li
+              key={f.filename}
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-surface-raised border border-white/5"
+            >
+              <FileText className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-white/80 truncate">{f.originalName}</p>
+                <p className="text-[10px] text-white/35">
+                  {formatByteSize(f.byteSize)} · {new Date(f.addedAt).toLocaleDateString()}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleDelete(f.filename)}
+                disabled={deleting === f.filename}
+                title="Remove"
+                className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded text-white/40 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-30 transition-colors"
+              >
+                {deleting === f.filename ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <X className="w-3 h-3" />
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <label
+        className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed text-label transition-colors ${
+          uploading
+            ? "border-white/10 text-white/30 cursor-wait"
+            : "border-white/15 text-white/60 hover:border-violet-500/50 hover:text-violet-400 cursor-pointer"
+        }`}
+      >
+        {uploading ? (
+          <>
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            Uploading...
+          </>
+        ) : (
+          <>
+            <Upload className="w-3.5 h-3.5" />
+            Upload documents
+          </>
+        )}
+        <input
+          type="file"
+          multiple
+          accept=".pdf,.docx,.pptx,.txt,.md"
+          disabled={uploading}
+          onChange={(e) => {
+            handleUpload(e.target.files);
+            e.target.value = ""; // allow re-uploading the same file
+          }}
+          className="hidden"
+        />
+      </label>
+    </div>
+  );
+}
+
+function formatByteSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
