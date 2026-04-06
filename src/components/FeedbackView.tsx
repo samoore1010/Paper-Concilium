@@ -339,6 +339,7 @@ export function FeedbackView({ feedback, transcript, recordingData, personas: se
               wpm={latestSession?.speechMetrics?.wordsPerMinute || 0}
               fillerCount={latestSession?.speechMetrics?.fillerWordCount || 0}
               sessionType={latestSession?.sessionType || "business-pitch"}
+              wordTimestamps={recordingData.wordTimestamps}
             />
           </div>
         )}
