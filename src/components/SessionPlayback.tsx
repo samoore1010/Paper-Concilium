@@ -729,12 +729,10 @@ function InteractiveTranscript({
                   <span
                     key={`chat-${idx}-${mi}`}
                     onClick={() => onSeek(Math.max(0, msg.time - 0.5))}
-                    className="block my-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 cursor-pointer hover:bg-amber-500/15 transition-colors"
+                    className="inline-flex items-baseline gap-1 mx-1 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 cursor-pointer hover:bg-amber-500/15 transition-colors align-baseline"
                   >
                     <span className="text-amber-400 font-medium text-caption">{msg.from}</span>
-                    <span className="text-white/50 text-caption ml-2 font-mono">{formatTimeCompact(msg.time)}</span>
-                    <br />
-                    <span className="text-white/60">{msg.text}</span>
+                    <span className="text-white/40 text-caption font-mono">{formatTimeCompact(msg.time)}</span>
                   </span>
                 );
               });
@@ -787,12 +785,10 @@ function InteractiveTranscript({
               <span
                 key={`trail-${i}`}
                 onClick={() => onSeek(Math.max(0, msg.time - 0.5))}
-                className="block my-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 cursor-pointer hover:bg-amber-500/15 transition-colors"
+                className="inline-flex items-baseline gap-1 mx-1 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 cursor-pointer hover:bg-amber-500/15 transition-colors align-baseline"
               >
                 <span className="text-amber-400 font-medium text-caption">{msg.from}</span>
-                <span className="text-white/50 text-caption ml-2 font-mono">{formatTimeCompact(msg.time)}</span>
-                <br />
-                <span className="text-white/60">{msg.text}</span>
+                <span className="text-white/40 text-caption font-mono">{formatTimeCompact(msg.time)}</span>
               </span>
             );
           });

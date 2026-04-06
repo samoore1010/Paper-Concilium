@@ -31,6 +31,8 @@ interface UseElevenLabsSTTReturn {
   wordTimestamps: WordTimestamp[];
   /** Consume new word timestamps since last call */
   consumeNewTimestamps: () => WordTimestamp[];
+  /** Return the epoch ms when the STT session started (for cross-hook synchronization) */
+  getStartTime: () => number;
 }
 
 export function useElevenLabsSTT(): UseElevenLabsSTTReturn {
