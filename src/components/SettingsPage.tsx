@@ -1020,6 +1020,12 @@ function CharacterBrainEditor({
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(brain);
 
+  // Safe accessors — server data may lack deeply nested fields if brains
+  // were loaded before the migration ran or if a live overlay is sparse.
+  const def = draft.definition ?? {} as CharacterBrain["definition"];
+  const beh = def.behavioral ?? {} as CharacterBrain["definition"]["behavioral"];
+  const triggers = beh.reactionTriggers ?? { leanForward: [], checkOut: [] };
+
   const updateDef = <K extends keyof CharacterBrain["definition"]>(
     key: K,
     value: CharacterBrain["definition"][K],
@@ -1072,7 +1078,7 @@ function CharacterBrainEditor({
       <BrainField label="Display name">
         <input
           type="text"
-          value={draft.definition.name}
+          value={def.name ?? ""}
           onChange={(e) => updateDef("name", e.target.value)}
           className={brainInputClass}
         />
@@ -1081,7 +1087,7 @@ function CharacterBrainEditor({
       <BrainField label="Archetype">
         <input
           type="text"
-          value={draft.definition.archetype}
+          value={def.archetype ?? ""}
           onChange={(e) => updateDef("archetype", e.target.value)}
           className={brainInputClass}
         />
@@ -1089,7 +1095,7 @@ function CharacterBrainEditor({
 
       <BrainField label="Bio">
         <textarea
-          value={draft.definition.bio}
+          value={def.bio ?? ""}
           onChange={(e) => updateDef("bio", e.target.value)}
           rows={2}
           className={brainInputClass}
@@ -1098,35 +1104,35 @@ function CharacterBrainEditor({
 
       <BrainField label="Priorities (one per line)">
         <ListEditor
-          items={draft.definition.priorities}
+          items={def.priorities ?? []}
           onChange={(v) => updateDef("priorities", v)}
         />
       </BrainField>
 
       <BrainField label="Pet peeves (one per line)">
         <ListEditor
-          items={draft.definition.pet_peeves}
+          items={def.pet_peeves ?? []}
           onChange={(v) => updateDef("pet_peeves", v)}
         />
       </BrainField>
 
       <BrainField label="Lean forward when... (one per line)">
         <ListEditor
-          items={draft.definition.behavioral.reactionTriggers.leanForward}
+          items={triggers.leanForward ?? []}
           onChange={(v) => updateTriggers("leanForward", v)}
         />
       </BrainField>
 
       <BrainField label="Check out when... (one per line)">
         <ListEditor
-          items={draft.definition.behavioral.reactionTriggers.checkOut}
+          items={triggers.checkOut ?? []}
           onChange={(v) => updateTriggers("checkOut", v)}
         />
       </BrainField>
 
       <BrainField label="Disagreement style">
         <textarea
-          value={draft.definition.behavioral.disagreementStyle}
+          value={beh.disagreementStyle ?? ""}
           onChange={(e) => updateBehavioral("disagreementStyle", e.target.value)}
           rows={2}
           className={brainInputClass}
@@ -1135,21 +1141,21 @@ function CharacterBrainEditor({
 
       <BrainField label="Rhetorical tendencies (one per line)">
         <ListEditor
-          items={draft.definition.behavioral.rhetoricalTendencies}
+          items={beh.rhetoricalTendencies ?? []}
           onChange={(v) => updateBehavioral("rhetoricalTendencies", v)}
         />
       </BrainField>
 
       <BrainField label="Opening lines (one per line)">
         <ListEditor
-          items={draft.definition.behavioral.openingPatterns}
+          items={beh.openingPatterns ?? []}
           onChange={(v) => updateBehavioral("openingPatterns", v)}
         />
       </BrainField>
 
       <BrainField label="Freeform notes (Markdown — appended to system prompt)">
         <textarea
-          value={draft.notes}
+          value={draft.notes ?? ""}
           onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
           rows={6}
           placeholder="Extra instructions, context, mood, custom rules..."
@@ -1160,7 +1166,7 @@ function CharacterBrainEditor({
       <BrainField label="Knowledge files (PDF, DOCX, PPTX, TXT, MD — appended to prompt when relevant)">
         <KnowledgeManager
           characterId={brain.id}
-          files={brain.knowledge}
+          files={brain.knowledge ?? []}
           onChange={(next) => onKnowledgeChange(brain.id, next)}
           showToast={showToast}
         />
@@ -1207,15 +1213,16 @@ function BrainField({ label, children }: { label: string; children: React.ReactN
 function ListEditor({ items, onChange }: { items: string[]; onChange: (v: string[]) => void }) {
   // Edit as newline-separated text. Splitting happens on blur so the user can
   // type blank lines without them collapsing mid-keystroke.
-  const [text, setText] = useState(items.join("\n"));
-  useEffect(() => { setText(items.join("\n")); }, [items]);
+  const safeItems = Array.isArray(items) ? items : [];
+  const [text, setText] = useState(safeItems.join("\n"));
+  useEffect(() => { setText(safeItems.join("\n")); }, [safeItems]);
 
   return (
     <textarea
       value={text}
       onChange={(e) => setText(e.target.value)}
       onBlur={() => onChange(text.split("\n").map((s) => s.trim()).filter(Boolean))}
-      rows={Math.max(2, Math.min(6, items.length + 1))}
+      rows={Math.max(2, Math.min(6, safeItems.length + 1))}
       className={brainInputClass}
     />
   );
