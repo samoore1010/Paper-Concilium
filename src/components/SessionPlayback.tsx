@@ -84,7 +84,8 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
       ctx.stroke();
     }
 
-    const maxTime = timeline[timeline.length - 1]?.time || duration || 1;
+    // Prefer audio duration so the chart never extends beyond the recording.
+    const maxTime = duration || timeline[timeline.length - 1]?.time || 1;
 
     // Time axis labels and vertical gridlines
     const timeInterval = maxTime <= 60 ? 15 : maxTime <= 180 ? 30 : 60;
@@ -250,7 +251,8 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const pct = x / rect.width;
-    const maxTime = timeline[timeline.length - 1]?.time || duration || 1;
+    // Prefer audio duration so the chart never extends beyond the recording.
+    const maxTime = duration || timeline[timeline.length - 1]?.time || 1;
     audio.currentTime = pct * maxTime;
     setCurrentTime(audio.currentTime);
   }, [timeline, duration]);
