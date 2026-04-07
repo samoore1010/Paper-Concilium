@@ -173,29 +173,46 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
   //  - After 1000ms of no new commits, flush buffer as ONE chat message
   //  - Fallback: if only interim text and stable for 1.5s, send that instead
   //  - Dedupe: skip if normalized text matches or substantially overlaps last sent
-  const lastPublishedRef = useRef("");       // dedup: last text sent to chat
+  const publishedHistoryRef = useRef<string[]>([]);  // all published texts for dedup
   const coalesceBufferRef = useRef("");      // accumulates committed chunks
   const lastCommitTimeRef = useRef(0);       // when last committed chunk arrived
   const lastInterimSnapshotRef = useRef(""); // tracks interim changes
   const interimStableSinceRef = useRef(0);   // when interim stopped changing
   const charsFlushedRef = useRef(0);         // total chars flushed to chat (sync counter)
   const flushedInterimRef = useRef("");      // last interim text that was flushed (hides from bottom bar)
+  const pendingInterimSentRef = useRef("");  // interim text sent by Tier 2, awaiting commit
+
+  const normalizeForDedup = (s: string) =>
+    s.trim().toLowerCase().replace(/[.,!?;:'"]+/g, "").replace(/\s+/g, " ");
 
   const flushToChat = useCallback((text: string, source: string) => {
     const trimmed = text.trim();
     if (!trimmed || sessionEndedRef.current) return;
 
-    // Dedupe: skip if identical OR substantial overlap with last published message
-    const normalized = trimmed.toLowerCase().replace(/\s+/g, " ");
-    const prev = lastPublishedRef.current;
-    if (prev && (normalized === prev || prev.includes(normalized) || normalized.includes(prev))) {
-      // If the new text is longer (superset of prev), allow it — it's a more complete version
-      if (normalized.length <= prev.length) {
-        console.log(`[AutoSend] Dedup skip (${source}): "${trimmed.substring(0, 40)}"`);
+    // Dedupe: check against ALL previously published messages.
+    // Skip if any previous message is a near-match (ignoring punctuation).
+    // Also skip if the new text is just a concatenation of already-sent messages.
+    const normalized = normalizeForDedup(trimmed);
+    for (const prev of publishedHistoryRef.current) {
+      if (normalized === prev || prev.includes(normalized)) {
+        console.log(`[AutoSend] Dedup skip — subset of prior (${source}): "${trimmed.substring(0, 40)}"`);
         return;
       }
     }
-    lastPublishedRef.current = normalized;
+
+    // Check if this text is just a concatenation of already-published messages.
+    // Build the combined history and see if the new text is contained in it.
+    const combinedHistory = publishedHistoryRef.current.join(" ");
+    if (combinedHistory && normalizeForDedup(combinedHistory).includes(normalized)) {
+      console.log(`[AutoSend] Dedup skip — combo of prior messages (${source}): "${trimmed.substring(0, 40)}"`);
+      return;
+    }
+
+    publishedHistoryRef.current.push(normalized);
+    // Keep history bounded to last 20 messages
+    if (publishedHistoryRef.current.length > 20) {
+      publishedHistoryRef.current = publishedHistoryRef.current.slice(-20);
+    }
 
     console.log(`[AutoSend] ${source} → chat: "${trimmed.substring(0, 60)}"`);
     if (waitingForResponseRef.current) waitingForResponseRef.current = false;
@@ -211,7 +228,8 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
     lastInterimSnapshotRef.current = "";
     interimStableSinceRef.current = Date.now();
     charsFlushedRef.current = 0;
-    lastPublishedRef.current = "";
+    publishedHistoryRef.current = [];
+    pendingInterimSentRef.current = "";
 
     const interval = setInterval(() => {
       if (sessionEndedRef.current) return;
@@ -230,9 +248,28 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
       if (coalesceBufferRef.current.length > 0 && (now - lastCommitTimeRef.current) >= 500) {
         const buf = coalesceBufferRef.current;
         coalesceBufferRef.current = "";
+
+        // If Tier 2 already sent this text as interim, skip the committed duplicate.
+        // The dedup in flushToChat will also catch this, but clearing the pending
+        // ref here keeps the state clean.
+        if (pendingInterimSentRef.current) {
+          const sentNorm = normalizeForDedup(pendingInterimSentRef.current);
+          const bufNorm = normalizeForDedup(buf);
+          if (sentNorm === bufNorm || sentNorm.includes(bufNorm)) {
+            console.log(`[AutoSend] Committed text already sent as interim, skipping: "${buf.substring(0, 40)}"`);
+            pendingInterimSentRef.current = "";
+            charsFlushedRef.current += buf.length;
+            lastInterimSnapshotRef.current = interimRef.current;
+            interimStableSinceRef.current = now;
+            return;
+          }
+          pendingInterimSentRef.current = "";
+        }
+
         flushToChat(buf, "committed");
         charsFlushedRef.current += buf.length;
-        flushedInterimRef.current = ""; // committed text supersedes — re-show interim
+        // Don't clear flushedInterimRef here — if Tier 2 sent the interim,
+        // re-showing it in the bottom bar would flash stale text.
         // Reset interim tracking since committed text supersedes it
         lastInterimSnapshotRef.current = interimRef.current;
         interimStableSinceRef.current = now;
@@ -264,6 +301,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
           flushToChat(trimmedInterim, `stable-interim(${stableMs}ms)`);
           charsFlushedRef.current += trimmedInterim.length;
           flushedInterimRef.current = interim; // hide from bottom bar until new speech
+          pendingInterimSentRef.current = trimmedInterim; // suppress duplicate when committed
           consumeNewText(); // keep STT hook pointer in sync
           // Reset interim tracking
           lastInterimSnapshotRef.current = "";
