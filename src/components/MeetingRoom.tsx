@@ -277,8 +277,13 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
         return;
       }
 
-      // ── Tier 2: Stable interim fallback (no commits, user paused) ──
-      // Only fires if there's no pending committed text in the buffer
+      // ── Tier 2: Stable interim fallback (last resort) ──
+      // Only fires if:
+      //  1. No pending committed text in the buffer
+      //  2. No committed text has arrived in the last 5 seconds
+      //     (if commits are flowing, Tier 1 handles everything)
+      //  3. Interim text has been stable for 3 seconds
+      // This handles the edge case where ElevenLabs stops committing.
       if (coalesceBufferRef.current.length > 0) return;
 
       const interim = interimRef.current;
@@ -289,20 +294,28 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
         return;
       }
 
-      // Interim stable for 1.5s and has meaningful unsent content → send
-      // Use charsFlushedRef (sync counter) instead of speechTranscriptRef
-      // (async React state) to avoid race where stale state under-counts
-      // what was already flushed, causing the full transcript to re-send.
+      // Only fire if no committed text in 5+ seconds (ElevenLabs not committing)
+      const timeSinceLastCommit = lastCommitTimeRef.current > 0
+        ? now - lastCommitTimeRef.current
+        : Infinity; // no commits ever → allow fallback
+      if (timeSinceLastCommit < 5000) return;
+
       const stableMs = now - interimStableSinceRef.current;
-      if (interim.length > 0 && stableMs >= 1500) {
-        // Only send the interim itself, not the full transcript — committed
-        // text is handled exclusively by Tier 1. This prevents any overlap.
-        const trimmedInterim = interim.trim();
-        if (trimmedInterim.length > 0) {
-          flushToChat(trimmedInterim, `stable-interim(${stableMs}ms)`);
-          charsFlushedRef.current += trimmedInterim.length;
+      if (interim.length > 0 && stableMs >= 3000) {
+        // ElevenLabs partial transcripts can be cumulative (contain the full
+        // session text including already-committed portions). Strip the
+        // committed prefix before sending.
+        const committedSoFar = speechTranscriptRef.current.trim();
+        let textToSend = interim.trim();
+        if (committedSoFar && textToSend.toLowerCase().startsWith(committedSoFar.toLowerCase())) {
+          textToSend = textToSend.substring(committedSoFar.length).trim();
+        }
+
+        if (textToSend.length > 0) {
+          flushToChat(textToSend, `stable-interim(${stableMs}ms)`);
+          charsFlushedRef.current += textToSend.length;
           flushedInterimRef.current = interim; // hide from bottom bar until new speech
-          pendingInterimSentRef.current = trimmedInterim; // suppress duplicate when committed
+          pendingInterimSentRef.current = textToSend; // suppress duplicate when committed
           consumeNewText(); // keep STT hook pointer in sync
           // Reset interim tracking
           lastInterimSnapshotRef.current = "";
@@ -910,10 +923,18 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
 
   const fmt = (s: number) => `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 
-  // Hide interim text from UI once it's been flushed to chat (Tier 2).
-  // When new speech arrives, interimTranscript changes and no longer matches → shows again.
-  const visibleInterim = interimTranscript && interimTranscript !== flushedInterimRef.current
-    ? interimTranscript : "";
+  // Show only the NEW portion of interim text in the bottom bar.
+  // ElevenLabs partials can be cumulative (full session text), so strip
+  // the committed prefix to show only what's currently being recognized.
+  // Also hide if it was already flushed to chat by Tier 2.
+  const visibleInterim = (() => {
+    if (!interimTranscript || interimTranscript === flushedInterimRef.current) return "";
+    const committed = speechTranscript.trim();
+    if (committed && interimTranscript.trim().toLowerCase().startsWith(committed.toLowerCase())) {
+      return interimTranscript.trim().substring(committed.length).trim();
+    }
+    return interimTranscript;
+  })();
 
   const audienceTiles = personas.map((persona) => {
     const state = personaStates[persona.id] || { reaction: "neutral" as ReactionType };
