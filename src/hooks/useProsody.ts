@@ -49,6 +49,13 @@ export function useProsody() {
   const SILENCE_THRESHOLD = 10; // Volume below this = silence
   const ownsStreamRef = useRef(true);
 
+  // Adaptive volume calibration — learn the user's mic range over
+  // the first few seconds of speech, then map their dynamic range to 0-100.
+  const calibrationSamplesRef = useRef<number[]>([]);
+  const calibrationDoneRef = useRef(false);
+  const rmsFloorRef = useRef(0);       // quiet baseline (10th percentile)
+  const rmsCeilingRef = useRef(0.25);  // loud baseline (90th percentile, default ~-12 dB)
+
   const startAnalysis = useCallback(async (externalStream?: MediaStream) => {
     try {
       let stream: MediaStream;
@@ -75,6 +82,10 @@ export function useProsody() {
       pitchHistoryRef.current = [];
       silentFramesRef.current = 0;
       totalFramesRef.current = 0;
+      calibrationSamplesRef.current = [];
+      calibrationDoneRef.current = false;
+      rmsFloorRef.current = 0;
+      rmsCeilingRef.current = 0.25;
 
       setIsAnalyzing(true);
       analysisStartRef.current = Date.now();
@@ -120,14 +131,50 @@ export function useProsody() {
       analyserRef.current.getByteTimeDomainData(timeData);
       analyserRef.current.getByteFrequencyData(freqData);
 
-      // Volume (RMS of time-domain data)
+      // Volume (RMS of time-domain data → adaptive 0-100 scale)
       let sumSquares = 0;
       for (let i = 0; i < bufferLength; i++) {
         const val = (timeData[i] - 128) / 128;
         sumSquares += val * val;
       }
       const rms = Math.sqrt(sumSquares / bufferLength);
-      const volume = Math.min(100, Math.round(rms * 300));
+
+      // --- Adaptive calibration ---
+      // Collect RMS samples for the first ~3 s of non-silent speech,
+      // then derive floor / ceiling from percentiles.
+      const RAW_SILENCE = 0.01; // RMS below this is silence, pre-calibration
+      if (!calibrationDoneRef.current) {
+        if (rms > RAW_SILENCE) {
+          calibrationSamplesRef.current.push(rms);
+        }
+        // After 30 speech samples (~3 s at 100 ms logging rate) finalise
+        if (calibrationSamplesRef.current.length >= 30) {
+          const sorted = [...calibrationSamplesRef.current].sort((a, b) => a - b);
+          rmsFloorRef.current = sorted[Math.floor(sorted.length * 0.10)];
+          rmsCeilingRef.current = Math.max(
+            sorted[Math.floor(sorted.length * 0.90)],
+            rmsFloorRef.current + 0.005 // ensure non-zero range
+          );
+          calibrationDoneRef.current = true;
+        }
+      }
+
+      // Map raw RMS to 0-100 using calibrated range.
+      // Floor → ~10, Ceiling → ~90, with headroom above/below.
+      const floor = rmsFloorRef.current;
+      const ceiling = rmsCeilingRef.current;
+      const range = ceiling - floor;
+      let volume: number;
+      if (rms <= RAW_SILENCE) {
+        volume = 0;
+      } else if (range > 0) {
+        // Linear map: floor→10, ceiling→90
+        volume = Math.round(10 + ((rms - floor) / range) * 80);
+        volume = Math.max(0, Math.min(100, volume));
+      } else {
+        // Fallback before calibration completes — generous scaling
+        volume = Math.min(100, Math.round(rms * 500));
+      }
 
       // Pitch estimation (autocorrelation on time-domain data)
       const pitch = estimatePitch(timeData, audioContextRef.current?.sampleRate || 44100);
@@ -214,36 +261,84 @@ export function useProsody() {
   };
 }
 
-// Simple autocorrelation-based pitch estimation
+/**
+ * YIN pitch estimation (de Cheveigné & Kawahara, 2002).
+ *
+ * Operates on the byte-domain time buffer from AnalyserNode.  The algorithm:
+ *   1. Compute the difference function d(τ).
+ *   2. Compute the cumulative mean normalised difference d'(τ).
+ *   3. Pick the first τ where d'(τ) < threshold (0.15 — generous enough for
+ *      noisy real-world speech while still rejecting unvoiced frames).
+ *   4. Parabolic interpolation around the chosen τ for sub-sample accuracy.
+ *
+ * Accepts pitches in the 50-500 Hz human-speech range only.
+ */
 function estimatePitch(buffer: Uint8Array, sampleRate: number): number {
   const SIZE = buffer.length;
-  const MAX_SAMPLES = Math.floor(SIZE / 2);
-  let bestOffset = -1;
-  let bestCorrelation = 0;
-  let foundGoodCorrelation = false;
+  const halfSize = Math.floor(SIZE / 2);
 
-  const correlations = new Float32Array(MAX_SAMPLES);
+  // Convert Uint8Array (0-255, centre 128) to float (-1..1)
+  const float = new Float32Array(SIZE);
+  for (let i = 0; i < SIZE; i++) {
+    float[i] = (buffer[i] - 128) / 128;
+  }
 
-  for (let offset = 0; offset < MAX_SAMPLES; offset++) {
-    let correlation = 0;
-    for (let i = 0; i < MAX_SAMPLES; i++) {
-      correlation += Math.abs((buffer[i] - 128) / 128 - (buffer[i + offset] - 128) / 128);
+  // --- Step 1: Difference function d(τ) ---
+  const d = new Float32Array(halfSize);
+  for (let tau = 0; tau < halfSize; tau++) {
+    let sum = 0;
+    for (let i = 0; i < halfSize; i++) {
+      const delta = float[i] - float[i + tau];
+      sum += delta * delta;
     }
-    correlation = 1 - correlation / MAX_SAMPLES;
-    correlations[offset] = correlation;
+    d[tau] = sum;
+  }
 
-    if (correlation > 0.9 && correlation > bestCorrelation) {
-      bestCorrelation = correlation;
-      bestOffset = offset;
-      foundGoodCorrelation = true;
-    } else if (foundGoodCorrelation) {
-      // Found a peak, now declining
+  // --- Step 2: Cumulative mean normalised difference d'(τ) ---
+  const dPrime = new Float32Array(halfSize);
+  dPrime[0] = 1; // defined as 1 for τ=0
+  let runningSum = 0;
+  for (let tau = 1; tau < halfSize; tau++) {
+    runningSum += d[tau];
+    dPrime[tau] = d[tau] / (runningSum / tau);
+  }
+
+  // --- Step 3: Absolute threshold ---
+  // Find the first tau in the valid pitch range where d'(τ) < threshold,
+  // then pick the minimum in that dip.
+  const YIN_THRESHOLD = 0.15;
+  const minPeriod = Math.floor(sampleRate / 500); // 500 Hz upper bound
+  const maxPeriod = Math.floor(sampleRate / 50);  // 50 Hz lower bound
+
+  let bestTau = -1;
+  for (let tau = minPeriod; tau < Math.min(maxPeriod, halfSize); tau++) {
+    if (dPrime[tau] < YIN_THRESHOLD) {
+      // Walk forward to find the local minimum in this dip
+      while (tau + 1 < halfSize && dPrime[tau + 1] < dPrime[tau]) {
+        tau++;
+      }
+      bestTau = tau;
       break;
     }
   }
 
-  if (bestCorrelation > 0.01 && bestOffset > 0) {
-    return sampleRate / bestOffset;
+  if (bestTau < 1) return 0;
+
+  // --- Step 4: Parabolic interpolation for sub-sample accuracy ---
+  let betterTau = bestTau;
+  if (bestTau > 0 && bestTau < halfSize - 1) {
+    const s0 = dPrime[bestTau - 1];
+    const s1 = dPrime[bestTau];
+    const s2 = dPrime[bestTau + 1];
+    const shift = (s0 - s2) / (2 * (s0 - 2 * s1 + s2));
+    if (isFinite(shift)) {
+      betterTau = bestTau + shift;
+    }
   }
-  return 0;
+
+  const pitch = sampleRate / betterTau;
+
+  // Final sanity check — human speech range
+  if (pitch < 50 || pitch > 500) return 0;
+  return pitch;
 }

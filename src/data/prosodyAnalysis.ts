@@ -120,11 +120,12 @@ export function analyzeVolume(timeline: ProsodyFrame[]): VolumeAnalysis {
   const p90 = sorted[Math.floor(sorted.length * 0.9)];
   const dynamicRange = p90 - p10;
 
-  // Count quiet drops (below 20 for 1+ seconds)
+  // Count quiet drops (below 25 for 1+ seconds)
+  // With adaptive calibration, normal speech centres around 40-60.
   let quietMoments = 0;
   let quietStart: number | null = null;
   timeline.forEach((f) => {
-    if (f.volume < 20 && !f.isSilent) {
+    if (f.volume < 25 && f.volume > 0 && !f.isSilent) {
       if (quietStart === null) quietStart = f.time;
     } else {
       if (quietStart !== null && f.time - quietStart >= 1) quietMoments++;
@@ -132,11 +133,13 @@ export function analyzeVolume(timeline: ProsodyFrame[]): VolumeAnalysis {
     }
   });
 
+  // With adaptive calibration: floor maps to ~10, ceiling to ~90,
+  // so normal speech averages ~40-60.
   let projectionRating: VolumeAnalysis["projectionRating"];
-  if (avg < 15) projectionRating = "too-quiet";
-  else if (avg < 30) projectionRating = "quiet";
-  else if (avg < 70) projectionRating = "good";
-  else if (avg < 85) projectionRating = "loud";
+  if (avg < 20) projectionRating = "too-quiet";
+  else if (avg < 35) projectionRating = "quiet";
+  else if (avg < 75) projectionRating = "good";
+  else if (avg < 88) projectionRating = "loud";
   else projectionRating = "too-loud";
 
   let dynamicsRating: VolumeAnalysis["dynamicsRating"];
