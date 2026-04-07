@@ -233,10 +233,33 @@ export function useElevenLabsSTT(): UseElevenLabsSTTReturn {
         } else if (msgType === "transcript_committed" || msgType === "committed_transcript") {
           const text = msg.text || "";
           if (text.trim()) {
-            finalTranscriptRef.current += text + " ";
-            setTranscript(finalTranscriptRef.current);
+            // ElevenLabs Scribe committed text can be cumulative (containing
+            // the full session transcript, not just the new segment). Only
+            // append the genuinely new portion to avoid duplication downstream.
+            const existing = finalTranscriptRef.current.trimEnd();
+            const incoming = text.trim();
+            const existingNorm = existing.toLowerCase().replace(/\s+/g, " ");
+            const incomingNorm = incoming.toLowerCase().replace(/\s+/g, " ");
+
+            let newText: string;
+            if (existingNorm && incomingNorm.startsWith(existingNorm)) {
+              // Cumulative commit — extract only the new tail
+              newText = incoming.substring(existing.length).trim();
+            } else if (existingNorm && existingNorm.endsWith(incomingNorm)) {
+              // Exact duplicate of what we already have — skip entirely
+              newText = "";
+            } else {
+              newText = incoming;
+            }
+
+            if (newText) {
+              finalTranscriptRef.current += newText + " ";
+              setTranscript(finalTranscriptRef.current);
+              console.log(`[EL-STT] ✓ "${newText.substring(0, 60)}"${newText !== incoming ? " (deduped)" : ""}`);
+            } else {
+              console.log(`[EL-STT] Skip duplicate commit: "${incoming.substring(0, 40)}..."`);
+            }
             setInterimTranscript("");
-            console.log(`[EL-STT] ✓ "${text.trim().substring(0, 60)}"`);
           }
         } else if (msgType === "session_started") {
           console.log("[EL-STT] Session active");
