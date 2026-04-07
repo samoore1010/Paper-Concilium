@@ -68,6 +68,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
   const [generatingCount, setGeneratingCount] = useState(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval>>(undefined);
+  const goLiveTimeRef = useRef(0); // set when Go Live pressed — elapsed counts from here
 
   // Admin model selection
   const [reactionModel, setReactionModel] = useState<LLMModel>("claude-haiku-4-5-20251001");
@@ -315,6 +316,8 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
 
   const startContinuousMode = useCallback(async () => {
     setContinuousActive(true);
+    goLiveTimeRef.current = Date.now();
+    setElapsed(0);
     // IMPORTANT: Start ElevenLabs STT FIRST — it opens its own mic stream and
     // AudioWorklet pipeline. Opening other mic streams before it can interfere.
     await startListening();
@@ -488,8 +491,15 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
     }
   }, [interimTranscript, continuousActive]);
 
+  // Elapsed timer — counts seconds since Go Live was pressed.
+  // The interval starts on mount but only advances once goLiveTimeRef is set.
+  // This avoids tying the effect to continuousActive (which could cause re-renders).
   useEffect(() => {
-    timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
+    timerRef.current = setInterval(() => {
+      if (goLiveTimeRef.current > 0) {
+        setElapsed(Math.floor((Date.now() - goLiveTimeRef.current) / 1000));
+      }
+    }, 1000);
     return () => clearInterval(timerRef.current);
   }, []);
 
