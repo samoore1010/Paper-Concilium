@@ -96,7 +96,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
   const AUDIENCE_COOLDOWN_MS = 2000;              // min gap between audience speakers                       // Max questions before forced rotation
 
   const sharedStreamRef = useRef<MediaStream | null>(null);
-  const processUserInputRef = useRef<(text: string) => void>(() => {});
+  const processUserInputRef = useRef<(text: string, speakingTime?: number) => void>(() => {});
 
   const theme = getTheme(sessionType);
   const behavior = getSessionBehavior(sessionType);
@@ -177,6 +177,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
   const publishedHistoryRef = useRef<string[]>([]);  // all published texts for dedup
   const coalesceBufferRef = useRef("");      // accumulates committed chunks
   const lastCommitTimeRef = useRef(0);       // when last committed chunk arrived
+  const coalesceStartElapsedRef = useRef(0); // elapsed time when first chunk entered buffer
   const lastInterimSnapshotRef = useRef(""); // tracks interim changes
   const interimStableSinceRef = useRef(0);   // when interim stopped changing
   const charsFlushedRef = useRef(0);         // total chars flushed to chat (sync counter)
@@ -186,7 +187,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
   const normalizeForDedup = (s: string) =>
     s.trim().toLowerCase().replace(/[.,!?;:'"]+/g, "").replace(/\s+/g, " ");
 
-  const flushToChat = useCallback((text: string, source: string) => {
+  const flushToChat = useCallback((text: string, source: string, speakingTime?: number) => {
     const trimmed = text.trim();
     if (!trimmed || sessionEndedRef.current) return;
 
@@ -215,10 +216,10 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
       publishedHistoryRef.current = publishedHistoryRef.current.slice(-20);
     }
 
-    console.log(`[AutoSend] ${source} → chat: "${trimmed.substring(0, 60)}"`);
+    console.log(`[AutoSend] ${source} → chat (t=${speakingTime ?? elapsed}): "${trimmed.substring(0, 60)}"`);
     if (waitingForResponseRef.current) waitingForResponseRef.current = false;
-    processUserInputRef.current(trimmed);
-  }, []);
+    processUserInputRef.current(trimmed, speakingTime);
+  }, [elapsed]);
 
   useEffect(() => {
     if (!continuousActive) return;
@@ -240,6 +241,12 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
       // ── Tier 1: Committed text with coalescing window ──
       const committed = consumeNewText();
       if (committed.length > 0) {
+        if (!coalesceBufferRef.current) {
+          // First chunk in this batch — record when it arrived.
+          // Used to estimate when the user started speaking.
+          coalesceStartElapsedRef.current = goLiveTimeRef.current > 0
+            ? Math.floor((now - goLiveTimeRef.current) / 1000) : 0;
+        }
         coalesceBufferRef.current += (coalesceBufferRef.current ? " " : "") + committed;
         lastCommitTimeRef.current = now;
         return; // Wait for coalescing window before sending
@@ -267,7 +274,15 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
           pendingInterimSentRef.current = "";
         }
 
-        flushToChat(buf, "committed");
+        // Estimate when the user started speaking: use the time the first
+        // committed chunk arrived, minus estimated speech duration.
+        // This corrects for STT processing latency (committed text arrives
+        // seconds after the user finished speaking).
+        const wordCount = buf.split(/\s+/).length;
+        const estimatedSpeechSec = Math.round(wordCount * 0.4); // ~150 WPM
+        const speakingTime = Math.max(0, coalesceStartElapsedRef.current - estimatedSpeechSec);
+
+        flushToChat(buf, "committed", speakingTime);
         charsFlushedRef.current += buf.length;
         // Don't clear flushedInterimRef here — if Tier 2 sent the interim,
         // re-showing it in the bottom bar would flash stale text.
@@ -535,11 +550,15 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
   }, [personas, speakingPersonaId]);
 
   // Shared input processing (used by both send button and continuous mode)
-  const processUserInput = useCallback((text: string) => {
+  const processUserInput = useCallback((text: string, speakingTime?: number) => {
     if (!text.trim() || sessionEndedRef.current) return;
     wordCountRef.current += text.trim().split(/\s+/).length;
     setTranscript((prev) => [...prev, text.trim()]);
-    setChatMessages((prev) => [...prev, { from: "You", text: text.trim(), time: elapsed }]);
+    // Use estimated speaking start time if provided, otherwise fall back to elapsed.
+    // This corrects for STT processing latency — committed text arrives seconds
+    // after the user actually spoke.
+    const messageTime = speakingTime ?? elapsed;
+    setChatMessages((prev) => [...prev, { from: "You", text: text.trim(), time: messageTime }]);
     updateMetrics(text.trim());
 
     // User responded — unlock interrupt queue and schedule next with cooldown
