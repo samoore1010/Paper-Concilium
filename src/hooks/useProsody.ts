@@ -1,10 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { yinPitchDetect, hasVoiceEnergy } from "../audio/yinPitch";
 
 export interface ProsodyFrame {
   time: number;         // seconds since start
-  volume: number;       // 0-100 (calibrated)
-  pitch: number;        // Hz (YIN algorithm)
+  volume: number;       // 0-100
+  pitch: number;        // Hz
   energy: number;       // 0-100
   isSilent: boolean;
 }
@@ -17,12 +16,6 @@ export interface ProsodyMetrics {
   pitchVariation: number;
   energyLevel: number;
   silenceRatio: number;
-}
-
-export interface CalibrationState {
-  status: "idle" | "calibrating" | "done";
-  baselineRms: number;     // user's normal speaking level (raw RMS)
-  progress: number;        // 0-1
 }
 
 const INITIAL_METRICS: ProsodyMetrics = {
@@ -38,11 +31,6 @@ const INITIAL_METRICS: ProsodyMetrics = {
 export function useProsody() {
   const [metrics, setMetrics] = useState<ProsodyMetrics>(INITIAL_METRICS);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [calibration, setCalibration] = useState<CalibrationState>({
-    status: "idle",
-    baselineRms: 0.03, // sensible default — will be overridden by calibration
-    progress: 0,
-  });
   const timelineRef = useRef<ProsodyFrame[]>([]);
 
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -61,61 +49,6 @@ export function useProsody() {
   const SILENCE_THRESHOLD = 10; // Volume below this = silence
   const ownsStreamRef = useRef(true);
 
-  // Calibration data
-  const calibrationRef = useRef({
-    baselineRms: 0.03,
-    rmsAccumulator: [] as number[],
-    isCalibrating: false,
-    calibrationStartTime: 0,
-  });
-
-  // Float32 buffer for YIN (reused to avoid GC pressure)
-  const floatBufferRef = useRef<Float32Array | null>(null);
-
-  /**
-   * Convert raw RMS to calibrated 0-100 volume.
-   * Maps the user's baseline speaking level to ~55 (comfortable middle),
-   * with headroom for loud projection up to 100.
-   */
-  const rmsToVolume = useCallback((rms: number): number => {
-    const baseline = calibrationRef.current.baselineRms;
-    if (baseline <= 0) return 0;
-    // Normalize so baseline = 55, with log scaling for natural perception
-    // This follows the Weber-Fechner law: perceived loudness ∝ log(intensity)
-    const ratio = rms / baseline;
-    if (ratio < 0.01) return 0;
-    // log2(1) = 0 → 55, log2(2) = 1 → 80, log2(0.5) = -1 → 30
-    const logScale = Math.log2(ratio);
-    const volume = 55 + logScale * 25;
-    return Math.max(0, Math.min(100, Math.round(volume)));
-  }, []);
-
-  /**
-   * Start calibration: records 3 seconds of speech to establish baseline.
-   * Call this before or at the start of the session.
-   */
-  const startCalibration = useCallback((externalStream?: MediaStream) => {
-    calibrationRef.current.isCalibrating = true;
-    calibrationRef.current.rmsAccumulator = [];
-    calibrationRef.current.calibrationStartTime = Date.now();
-    setCalibration({ status: "calibrating", baselineRms: 0, progress: 0 });
-
-    // If we already have an analyser running, calibration happens in the main tick loop.
-    // If not, we need to set up a temporary one.
-    if (!analyserRef.current && externalStream) {
-      // Will be handled when startAnalysis is called
-    }
-  }, []);
-
-  /**
-   * Skip calibration and use a sensible default.
-   */
-  const skipCalibration = useCallback(() => {
-    calibrationRef.current.isCalibrating = false;
-    calibrationRef.current.baselineRms = 0.03;
-    setCalibration({ status: "done", baselineRms: 0.03, progress: 1 });
-  }, []);
-
   const startAnalysis = useCallback(async (externalStream?: MediaStream) => {
     try {
       let stream: MediaStream;
@@ -128,9 +61,8 @@ export function useProsody() {
       }
       const audioContext = new AudioContext();
       const analyser = audioContext.createAnalyser();
-      // Use 4096 FFT for better low-frequency resolution (important for male voices ~85-180Hz)
-      analyser.fftSize = 4096;
-      analyser.smoothingTimeConstant = 0.3; // Less smoothing = more responsive pitch tracking
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0.8;
 
       const source = audioContext.createMediaStreamSource(stream);
       source.connect(analyser);
@@ -138,9 +70,6 @@ export function useProsody() {
       audioContextRef.current = audioContext;
       analyserRef.current = analyser;
       sourceRef.current = source;
-
-      // Pre-allocate float buffer for YIN
-      floatBufferRef.current = new Float32Array(analyser.fftSize);
 
       volumeHistoryRef.current = [];
       pitchHistoryRef.current = [];
@@ -151,20 +80,11 @@ export function useProsody() {
       analysisStartRef.current = Date.now();
       lastFrameLogRef.current = Date.now();
       timelineRef.current = [];
-
-      // Auto-start calibration if not already done
-      if (calibration.status === "idle") {
-        calibrationRef.current.isCalibrating = true;
-        calibrationRef.current.rmsAccumulator = [];
-        calibrationRef.current.calibrationStartTime = Date.now();
-        setCalibration({ status: "calibrating", baselineRms: 0, progress: 0 });
-      }
-
       analyze();
     } catch (err) {
       console.error("Failed to start prosody analysis:", err);
     }
-  }, [calibration.status]);
+  }, []);
 
   const stopAnalysis = useCallback(() => {
     setIsAnalyzing(false);
@@ -190,65 +110,27 @@ export function useProsody() {
     const analyser = analyserRef.current;
     if (!analyser) return;
 
-    const bufferLength = analyser.fftSize;
+    const bufferLength = analyser.frequencyBinCount;
+    const timeData = new Uint8Array(bufferLength);
+    const freqData = new Uint8Array(bufferLength);
 
     const tick = () => {
-      if (!analyserRef.current || !floatBufferRef.current) return;
-      const floatData = floatBufferRef.current;
-      const sampleRate = audioContextRef.current?.sampleRate || 44100;
+      if (!analyserRef.current) return;
 
-      // Get float time-domain data (32-bit precision for YIN)
-      analyserRef.current.getFloatTimeDomainData(floatData);
+      analyserRef.current.getByteTimeDomainData(timeData);
+      analyserRef.current.getByteFrequencyData(freqData);
 
-      // Volume: RMS of float samples (already -1 to 1)
+      // Volume (RMS of time-domain data)
       let sumSquares = 0;
       for (let i = 0; i < bufferLength; i++) {
-        sumSquares += floatData[i] * floatData[i];
+        const val = (timeData[i] - 128) / 128;
+        sumSquares += val * val;
       }
       const rms = Math.sqrt(sumSquares / bufferLength);
+      const volume = Math.min(100, Math.round(rms * 300));
 
-      // Handle calibration
-      if (calibrationRef.current.isCalibrating) {
-        const elapsed = Date.now() - calibrationRef.current.calibrationStartTime;
-        const CALIBRATION_DURATION = 3000; // 3 seconds
-        const progress = Math.min(1, elapsed / CALIBRATION_DURATION);
-
-        // Only accumulate non-silent frames for baseline
-        if (rms > 0.005) {
-          calibrationRef.current.rmsAccumulator.push(rms);
-        }
-
-        if (elapsed >= CALIBRATION_DURATION) {
-          calibrationRef.current.isCalibrating = false;
-          const samples = calibrationRef.current.rmsAccumulator;
-          if (samples.length > 10) {
-            // Use median for robustness against outliers (coughs, mic bumps)
-            const sorted = [...samples].sort((a, b) => a - b);
-            const median = sorted[Math.floor(sorted.length / 2)];
-            calibrationRef.current.baselineRms = median;
-            setCalibration({ status: "done", baselineRms: median, progress: 1 });
-            console.log(`[Prosody] Calibration complete: baseline RMS = ${median.toFixed(4)} (${samples.length} samples)`);
-          } else {
-            // Not enough voiced samples — use default
-            calibrationRef.current.baselineRms = 0.03;
-            setCalibration({ status: "done", baselineRms: 0.03, progress: 1 });
-            console.log("[Prosody] Calibration: not enough speech, using default baseline");
-          }
-        } else {
-          setCalibration((prev) => ({ ...prev, progress }));
-        }
-      }
-
-      // Convert RMS to calibrated volume
-      const volume = rmsToVolume(rms);
-
-      // Pitch: YIN algorithm on float data (only if there's voice energy)
-      let pitch = 0;
-      if (hasVoiceEnergy(floatData, 0.008)) {
-        pitch = yinPitchDetect(floatData, sampleRate, 0.15);
-        // Sanity check: human speech is 50-500 Hz
-        if (pitch < 50 || pitch > 500) pitch = 0;
-      }
+      // Pitch estimation (autocorrelation on time-domain data)
+      const pitch = estimatePitch(timeData, audioContextRef.current?.sampleRate || 44100);
 
       // Track history
       volumeHistoryRef.current.push(volume);
@@ -287,7 +169,7 @@ export function useProsody() {
         silenceRatio,
       });
 
-      // Log timeline frame every 100ms (not every rAF which is ~16ms)
+      // Log timeline frame every 100ms (not every rAF which is 16ms)
       const frameNow = Date.now();
       if (frameNow - lastFrameLogRef.current >= 100) {
         lastFrameLogRef.current = frameNow;
@@ -305,7 +187,7 @@ export function useProsody() {
     };
 
     rafRef.current = requestAnimationFrame(tick);
-  }, [rmsToVolume]);
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -322,18 +204,46 @@ export function useProsody() {
   }, []);
 
   const getTimeline = useCallback(() => [...timelineRef.current], []);
-  /** Return the epoch ms when analysis started (for cross-hook synchronization) */
-  const getStartTime = useCallback(() => analysisStartRef.current, []);
 
   return {
     metrics,
     isAnalyzing,
-    calibration,
     startAnalysis,
     stopAnalysis,
-    startCalibration,
-    skipCalibration,
     getTimeline,
-    getStartTime,
   };
+}
+
+// Simple autocorrelation-based pitch estimation
+function estimatePitch(buffer: Uint8Array, sampleRate: number): number {
+  const SIZE = buffer.length;
+  const MAX_SAMPLES = Math.floor(SIZE / 2);
+  let bestOffset = -1;
+  let bestCorrelation = 0;
+  let foundGoodCorrelation = false;
+
+  const correlations = new Float32Array(MAX_SAMPLES);
+
+  for (let offset = 0; offset < MAX_SAMPLES; offset++) {
+    let correlation = 0;
+    for (let i = 0; i < MAX_SAMPLES; i++) {
+      correlation += Math.abs((buffer[i] - 128) / 128 - (buffer[i + offset] - 128) / 128);
+    }
+    correlation = 1 - correlation / MAX_SAMPLES;
+    correlations[offset] = correlation;
+
+    if (correlation > 0.9 && correlation > bestCorrelation) {
+      bestCorrelation = correlation;
+      bestOffset = offset;
+      foundGoodCorrelation = true;
+    } else if (foundGoodCorrelation) {
+      // Found a peak, now declining
+      break;
+    }
+  }
+
+  if (bestCorrelation > 0.01 && bestOffset > 0) {
+    return sampleRate / bestOffset;
+  }
+  return 0;
 }

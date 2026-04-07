@@ -1,24 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
-/** Word-level timestamp from ElevenLabs STT or estimated fallback */
-export interface WordTimestamp {
-  word: string;
-  start: number;   // seconds from session start
-  end: number;     // seconds from session start
-  isFiller: boolean;
-}
-
-const FILLER_WORDS = new Set([
-  "um", "uh", "like", "basically", "actually", "literally",
-  "honestly", "really",
-]);
-const FILLER_PHRASES = ["you know", "sort of", "kind of", "i mean", "you know what"];
-
-function isFillerWord(word: string): boolean {
-  const lower = word.toLowerCase().replace(/[.,!?;:]/g, "");
-  return FILLER_WORDS.has(lower);
-}
-
 interface UseElevenLabsSTTReturn {
   transcript: string;
   interimTranscript: string;
@@ -27,12 +8,6 @@ interface UseElevenLabsSTTReturn {
   stopListening: () => void;
   consumeNewText: () => string;
   supported: boolean;
-  /** Word-level timestamps collected from STT */
-  wordTimestamps: WordTimestamp[];
-  /** Consume new word timestamps since last call */
-  consumeNewTimestamps: () => WordTimestamp[];
-  /** Return the epoch ms when the STT session started (for cross-hook synchronization) */
-  getStartTime: () => number;
 }
 
 export function useElevenLabsSTT(): UseElevenLabsSTTReturn {
@@ -40,7 +15,6 @@ export function useElevenLabsSTT(): UseElevenLabsSTTReturn {
   const [interimTranscript, setInterimTranscript] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [supported, setSupported] = useState(false);
-  const [wordTimestamps, setWordTimestamps] = useState<WordTimestamp[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -48,11 +22,8 @@ export function useElevenLabsSTT(): UseElevenLabsSTTReturn {
   const contextRef = useRef<AudioContext | null>(null);
   const finalTranscriptRef = useRef("");
   const lastConsumedRef = useRef(0);
-  const lastConsumedTimestampRef = useRef(0);
   const chunksSentRef = useRef(0);
   const activeRef = useRef(false);
-  const sessionStartTimeRef = useRef(0);
-  const wordTimestampsRef = useRef<WordTimestamp[]>([]);
 
   const startingRef = useRef(false);
 
@@ -79,7 +50,6 @@ export function useElevenLabsSTT(): UseElevenLabsSTTReturn {
     activeRef.current = true;
     pendingChunksRef.current = [];
     chunksSentRef.current = 0;
-    sessionStartTimeRef.current = Date.now();
 
     try {
 
@@ -267,56 +237,6 @@ export function useElevenLabsSTT(): UseElevenLabsSTTReturn {
             setTranscript(finalTranscriptRef.current);
             setInterimTranscript("");
             console.log(`[EL-STT] ✓ "${text.trim().substring(0, 60)}"`);
-
-            // Extract word-level timestamps if available
-            // ElevenLabs Scribe returns words array with start/end times
-            const words: any[] = msg.words || [];
-            if (words.length > 0) {
-              const sessionStart = sessionStartTimeRef.current;
-              const newTimestamps: WordTimestamp[] = words.map((w: any) => ({
-                word: w.text || w.word || "",
-                start: typeof w.start === "number" ? w.start : 0,
-                end: typeof w.end === "number" ? w.end : 0,
-                isFiller: isFillerWord(w.text || w.word || ""),
-              }));
-              wordTimestampsRef.current = [...wordTimestampsRef.current, ...newTimestamps];
-              setWordTimestamps([...wordTimestampsRef.current]);
-            } else {
-              // Fallback: generate approximate timestamps from text + current time
-              // This gives us word-level data even without native STT word timestamps
-              const sessionElapsed = (Date.now() - sessionStartTimeRef.current) / 1000;
-              const wordList = text.trim().split(/\s+/);
-              if (wordList.length > 0) {
-                // Estimate ~0.3s per word, spread backward from current time
-                const wordDuration = 0.3;
-                const phraseStart = Math.max(0, sessionElapsed - wordList.length * wordDuration);
-                const newTimestamps: WordTimestamp[] = wordList.map((w: string, i: number) => ({
-                  word: w,
-                  start: phraseStart + i * wordDuration,
-                  end: phraseStart + (i + 1) * wordDuration,
-                  isFiller: isFillerWord(w),
-                }));
-                wordTimestampsRef.current = [...wordTimestampsRef.current, ...newTimestamps];
-                setWordTimestamps([...wordTimestampsRef.current]);
-              }
-            }
-
-            // Check for filler phrases in the committed text
-            const lowerText = text.toLowerCase();
-            for (const phrase of FILLER_PHRASES) {
-              let searchIdx = 0;
-              while (true) {
-                const idx = lowerText.indexOf(phrase, searchIdx);
-                if (idx === -1) break;
-                // Mark the first word of the phrase as a filler in the timestamps
-                const wordsBefore = lowerText.substring(0, idx).split(/\s+/).filter(Boolean).length;
-                const timestampIdx = wordTimestampsRef.current.length - text.trim().split(/\s+/).length + wordsBefore;
-                if (timestampIdx >= 0 && timestampIdx < wordTimestampsRef.current.length) {
-                  wordTimestampsRef.current[timestampIdx].isFiller = true;
-                }
-                searchIdx = idx + phrase.length;
-              }
-            }
           }
         } else if (msgType === "session_started") {
           console.log("[EL-STT] Session active");
@@ -363,19 +283,9 @@ export function useElevenLabsSTT(): UseElevenLabsSTTReturn {
     return newText;
   }, []);
 
-  const consumeNewTimestamps = useCallback((): WordTimestamp[] => {
-    const all = wordTimestampsRef.current;
-    const newItems = all.slice(lastConsumedTimestampRef.current);
-    lastConsumedTimestampRef.current = all.length;
-    return newItems;
-  }, []);
-
   useEffect(() => {
     return () => { activeRef.current = false; startingRef.current = false; if (wsRef.current) wsRef.current.close(); cleanup(); };
   }, [cleanup]);
 
-  /** Return the epoch ms when the STT session started (for cross-hook synchronization) */
-  const getStartTime = useCallback(() => sessionStartTimeRef.current, []);
-
-  return { transcript, interimTranscript, isListening, startListening, stopListening, consumeNewText, supported, wordTimestamps, consumeNewTimestamps, getStartTime };
+  return { transcript, interimTranscript, isListening, startListening, stopListening, consumeNewText, supported };
 }

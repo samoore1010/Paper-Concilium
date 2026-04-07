@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Play, Pause } from "lucide-react";
 import { ProsodyFrame } from "../hooks/useProsody";
-import { WordTimestamp } from "../hooks/useElevenLabsSTT";
 import { generateCoachingReport, CoachingReport } from "../data/prosodyAnalysis";
 
 export interface SessionEvent {
@@ -17,8 +16,6 @@ export interface ChatMessage {
   time: number; // seconds from session start
 }
 
-type TranscriptFilter = "all" | "fillers" | "volume-drops" | "monotone";
-
 interface SessionPlaybackProps {
   audioUrl: string;
   duration: number;
@@ -29,20 +26,13 @@ interface SessionPlaybackProps {
   wpm?: number;
   fillerCount?: number;
   sessionType?: string;
-  wordTimestamps?: WordTimestamp[];
 }
 
-export function SessionPlayback({ audioUrl, duration, timeline, events, transcript, chatMessages = [], wpm = 0, fillerCount = 0, sessionType = "business-pitch", wordTimestamps = [] }: SessionPlaybackProps) {
+export function SessionPlayback({ audioUrl, duration, timeline, events, transcript, chatMessages = [], wpm = 0, fillerCount = 0, sessionType = "business-pitch" }: SessionPlaybackProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [activeMetric, setActiveMetric] = useState<"volume" | "pitch" | "energy">("volume");
-  const [transcriptFilter, setTranscriptFilter] = useState<TranscriptFilter>("all");
-  const [transcriptFontSize, setTranscriptFontSize] = useState<"sm" | "base" | "lg">("base");
-  // Bidirectional sync: hovered time range from transcript → waveform highlight
-  const [hoveredTimeRange, setHoveredTimeRange] = useState<[number, number] | null>(null);
-  // Bidirectional sync: hovered time from waveform → transcript word highlight
-  const [waveformHoverTime, setWaveformHoverTime] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -94,7 +84,7 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
       ctx.stroke();
     }
 
-    const maxTime = duration || timeline[timeline.length - 1]?.time || 1;
+    const maxTime = timeline[timeline.length - 1]?.time || duration || 1;
 
     // Time axis labels and vertical gridlines
     const timeInterval = maxTime <= 60 ? 15 : maxTime <= 180 ? 30 : 60;
@@ -208,22 +198,6 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
     ctx.textAlign = "left";
     ctx.fillText(labelText, badgeX + 15, badgeY + badgeH / 2 + 3.5);
 
-    // Draw hovered word highlight region (bidirectional sync from transcript)
-    if (hoveredTimeRange) {
-      const [hStart, hEnd] = hoveredTimeRange;
-      const x1 = (hStart / maxTime) * w;
-      const x2 = (hEnd / maxTime) * w;
-      ctx.fillStyle = "rgba(99, 102, 241, 0.15)";
-      ctx.fillRect(x1, 0, Math.max(x2 - x1, 3), h);
-      // Border lines
-      ctx.strokeStyle = "rgba(99, 102, 241, 0.5)";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(x1, 0); ctx.lineTo(x1, h);
-      ctx.moveTo(x2, 0); ctx.lineTo(x2, h);
-      ctx.stroke();
-    }
-
     // Draw playback position
     if (currentTime > 0) {
       const px = (currentTime / maxTime) * w;
@@ -240,7 +214,7 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
       ctx.arc(px, h / 2, 5, 0, Math.PI * 2);
       ctx.fill();
     }
-  }, [timeline, events, currentTime, activeMetric, duration, canvasSize, hoveredTimeRange]);
+  }, [timeline, events, currentTime, activeMetric, duration, canvasSize]);
 
   // Sync audio time to state
   useEffect(() => {
@@ -276,25 +250,10 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const pct = x / rect.width;
-    const maxTime = duration || timeline[timeline.length - 1]?.time || 1;
+    const maxTime = timeline[timeline.length - 1]?.time || duration || 1;
     audio.currentTime = pct * maxTime;
     setCurrentTime(audio.currentTime);
   }, [timeline, duration]);
-
-  // Waveform hover → compute time → feed to transcript for word highlight
-  const handleWaveformHover = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const pct = x / rect.width;
-    const maxTime = duration || timeline[timeline.length - 1]?.time || 1;
-    setWaveformHoverTime(pct * maxTime);
-  }, [timeline, duration]);
-
-  const handleWaveformLeave = useCallback(() => {
-    setWaveformHoverTime(null);
-  }, []);
 
   // Find events near current playback time
   const activeEvents = events.filter((e) => Math.abs(e.time - currentTime) < 2);
@@ -302,8 +261,8 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
   // Generate coaching report
   const coachingReport = useMemo(() => {
     if (timeline.length < 10) return null;
-    return generateCoachingReport(timeline, wpm, fillerCount, duration, sessionType, wordTimestamps.length > 0 ? wordTimestamps : undefined);
-  }, [timeline, wpm, fillerCount, duration, sessionType, wordTimestamps]);
+    return generateCoachingReport(timeline, wpm, fillerCount, duration, sessionType);
+  }, [timeline, wpm, fillerCount, duration, sessionType]);
 
   if (!audioUrl) {
     return (
@@ -343,8 +302,6 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
           ref={canvasRef}
           className="w-full cursor-pointer h-[180px] sm:h-[220px] md:h-[260px] lg:h-[300px]"
           onClick={seekTo}
-          onMouseMove={handleWaveformHover}
-          onMouseLeave={handleWaveformLeave}
         />
         {/* Current time / duration overlays */}
         <div className="absolute bottom-5 left-2 text-caption text-white/30 font-mono">{formatTime(currentTime)}</div>
@@ -408,33 +365,35 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
         </div>
       )}
 
-      {/* Interactive Transcript (merged with chat log) */}
-      {(wordTimestamps.length > 0 || chatMessages.length > 0) && (
-        <InteractiveTranscript
-          wordTimestamps={wordTimestamps}
-          chatMessages={chatMessages}
-          timeline={timeline}
-          currentTime={currentTime}
-          waveformHoverTime={waveformHoverTime}
-          filter={transcriptFilter}
-          fontSize={transcriptFontSize}
-          onSeek={(time) => {
-            if (audioRef.current) {
-              audioRef.current.currentTime = time;
-              setCurrentTime(time);
-              if (!isPlaying) {
-                audioRef.current.playbackRate = playbackSpeed;
-                audioRef.current.play();
-                setIsPlaying(true);
-              }
-            }
-          }}
-          onHoverWord={(start, end) => setHoveredTimeRange([start, end])}
-          onHoverLeave={() => setHoveredTimeRange(null)}
-          onFilterChange={setTranscriptFilter}
-          onFontSizeChange={setTranscriptFontSize}
-          fillerCount={wordTimestamps.filter((w) => w.isFiller).length}
-        />
+      {/* Session Chat Log */}
+      {chatMessages.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-caption text-white/40 uppercase tracking-wider">Session Chat Log</div>
+          <div className="max-h-[300px] overflow-y-auto scroll-touch space-y-0.5 rounded-lg bg-surface-raised border border-white/5 p-2">
+            {chatMessages.map((msg, i) => {
+              const isYou = msg.from === "You";
+              const isActive = Math.abs(msg.time - currentTime) < 2;
+              return (
+                <button
+                  key={i}
+                  onClick={() => {
+                    if (audioRef.current) {
+                      audioRef.current.currentTime = msg.time;
+                      setCurrentTime(msg.time);
+                    }
+                  }}
+                  className={`w-full text-left flex items-start gap-2 px-2 py-1.5 rounded text-label transition-colors ${
+                    isActive ? "bg-white/10" : "hover:bg-surface-overlay"
+                  }`}
+                >
+                  <span className="text-white/30 font-mono text-caption w-10 flex-shrink-0 pt-0.5">{formatTime(msg.time)}</span>
+                  <span className={`font-medium flex-shrink-0 ${isYou ? "text-blue-400" : "text-amber-400"}`}>{msg.from}:</span>
+                  <span className="text-white/60 break-words">{msg.text}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {/* Coaching Report */}
@@ -475,48 +434,6 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
             <CoachingCard title="Filler Words" rating={coachingReport.fillers.rating} advice={coachingReport.fillers.advice}
               stats={[{ label: "Count", value: `${coachingReport.fillers.count}` }, { label: "Per Minute", value: `${coachingReport.fillers.perMinute}` }]}
             />
-            {coachingReport.paceVariation.segments.length > 0 && (
-              <CoachingCard title="Pace Variation" rating={coachingReport.paceVariation.rating} advice={coachingReport.paceVariation.advice}
-                stats={[
-                  { label: "Range", value: `${coachingReport.paceVariation.minWpm}-${coachingReport.paceVariation.maxWpm} WPM` },
-                  { label: "Variation CV", value: `${(coachingReport.paceVariation.coefficientOfVariation * 100).toFixed(0)}%` },
-                  { label: "Rushing", value: `${coachingReport.paceVariation.rushingSegments} segments` },
-                  { label: "Dragging", value: `${coachingReport.paceVariation.draggingSegments} segments` },
-                ]}
-              />
-            )}
-            {coachingReport.energyArc.segments.length > 0 && (
-              <CoachingCard title="Energy Arc" rating={coachingReport.energyArc.rating} advice={coachingReport.energyArc.advice}
-                stats={[
-                  { label: "Shape", value: coachingReport.energyArc.arcShape.replace(/-/g, " ") },
-                  { label: "Opening", value: `${coachingReport.energyArc.openingEnergy}/100` },
-                  { label: "Closing", value: `${coachingReport.energyArc.closingEnergy}/100` },
-                  { label: "Trend", value: coachingReport.energyArc.energyTrend > 0 ? `+${coachingReport.energyArc.energyTrend} (building)` : `${coachingReport.energyArc.energyTrend} (fading)` },
-                ]}
-              />
-            )}
-            {coachingReport.energyArc.idealArc && (
-              <div className="md:col-span-2 rounded-xl border border-white/5 bg-surface-raised p-4">
-                <h4 className="text-xs font-semibold text-white/80 mb-2">Ideal Arc for {sessionType.replace(/-/g, " ")}</h4>
-                <p className="text-label text-white/50 leading-relaxed">{coachingReport.energyArc.idealArc}</p>
-                {/* Mini energy arc visualization */}
-                {coachingReport.energyArc.segments.length > 0 && (
-                  <div className="mt-3 flex items-end gap-1 h-16">
-                    {coachingReport.energyArc.segments.map((seg, i) => (
-                      <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                        <div
-                          className={`w-full rounded-t transition-all ${
-                            i === coachingReport.energyArc.peakSegment ? "bg-emerald-500/60" : "bg-indigo-500/40"
-                          }`}
-                          style={{ height: `${Math.max(4, (seg.averageEnergy / 100) * 56)}px` }}
-                        />
-                        <span className="text-caption text-white/30 truncate w-full text-center">{seg.label.split("-")[0]}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -556,258 +473,6 @@ function CoachingCard({ title, rating, advice, stats, className }: {
       </div>
     </div>
   );
-}
-
-// === Interactive Transcript Component ===
-
-function InteractiveTranscript({
-  wordTimestamps,
-  chatMessages = [],
-  timeline,
-  currentTime,
-  waveformHoverTime,
-  filter,
-  fontSize,
-  onSeek,
-  onHoverWord,
-  onHoverLeave,
-  onFilterChange,
-  onFontSizeChange,
-  fillerCount,
-}: {
-  wordTimestamps: WordTimestamp[];
-  chatMessages?: ChatMessage[];
-  timeline: ProsodyFrame[];
-  currentTime: number;
-  waveformHoverTime: number | null;
-  filter: TranscriptFilter;
-  fontSize: "sm" | "base" | "lg";
-  onSeek: (time: number) => void;
-  onHoverWord: (start: number, end: number) => void;
-  onHoverLeave: () => void;
-  onFilterChange: (f: TranscriptFilter) => void;
-  onFontSizeChange: (s: "sm" | "base" | "lg") => void;
-  fillerCount: number;
-}) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  // Find volume drops and monotone stretches from timeline for word-level annotation
-  const wordAnnotations = useMemo(() => {
-    const annotations = new Map<number, Set<string>>(); // wordIndex → set of annotation types
-
-    // Map each word to its prosody context
-    wordTimestamps.forEach((w, idx) => {
-      const tags = new Set<string>();
-
-      if (w.isFiller) tags.add("filler");
-
-      // Find timeline frames overlapping this word's time range
-      const wordFrames = timeline.filter((f) => f.time >= w.start && f.time <= w.end + 0.1);
-      if (wordFrames.length > 0) {
-        const avgVol = wordFrames.reduce((s, f) => s + f.volume, 0) / wordFrames.length;
-        if (avgVol < 20 && avgVol > 0) tags.add("quiet");
-
-        // Check if word is in a monotone stretch
-        const nearbyFrames = timeline.filter((f) => Math.abs(f.time - w.start) < 2.5);
-        const pitches = nearbyFrames.filter((f) => f.pitch > 50).map((f) => f.pitch);
-        if (pitches.length > 5) {
-          const avg = pitches.reduce((a, b) => a + b, 0) / pitches.length;
-          const std = Math.sqrt(pitches.reduce((s, p) => s + (p - avg) ** 2, 0) / pitches.length);
-          if (std < 10) tags.add("monotone");
-        }
-      }
-
-      if (tags.size > 0) annotations.set(idx, tags);
-    });
-
-    return annotations;
-  }, [wordTimestamps, timeline]);
-
-  // Count annotations for filter badges
-  const quietCount = useMemo(() => {
-    let c = 0;
-    wordAnnotations.forEach((tags) => { if (tags.has("quiet")) c++; });
-    return c;
-  }, [wordAnnotations]);
-  const monotoneCount = useMemo(() => {
-    let c = 0;
-    wordAnnotations.forEach((tags) => { if (tags.has("monotone")) c++; });
-    return c;
-  }, [wordAnnotations]);
-
-  // Filter words based on active filter
-  const shouldHighlight = useCallback((idx: number): boolean => {
-    if (filter === "all") return false;
-    const tags = wordAnnotations.get(idx);
-    if (!tags) return false;
-    if (filter === "fillers") return tags.has("filler");
-    if (filter === "volume-drops") return tags.has("quiet");
-    if (filter === "monotone") return tags.has("monotone");
-    return false;
-  }, [filter, wordAnnotations]);
-
-  const fontSizeClass = fontSize === "sm" ? "text-xs" : fontSize === "lg" ? "text-base" : "text-sm";
-
-  return (
-    <div className="space-y-2">
-      {/* Header with filter buttons and font size */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="text-caption text-white/40 uppercase tracking-wider">Interactive Transcript</div>
-        <div className="flex items-center gap-1.5">
-          {/* Font size controls */}
-          <span className="text-caption text-white/20 mr-1">A</span>
-          {(["sm", "base", "lg"] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => onFontSizeChange(s)}
-              className={`text-caption px-1.5 py-0.5 rounded transition-colors ${
-                fontSize === s ? "bg-white/10 text-white/70" : "bg-white/5 text-white/30 hover:text-white/50"
-              }`}
-            >
-              {s === "sm" ? "A" : s === "base" ? "A+" : "A++"}
-            </button>
-          ))}
-          <span className="text-white/10 mx-1">|</span>
-        </div>
-      </div>
-
-      {/* Filter pills */}
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {([
-          { key: "all" as const, label: "All", color: "bg-white/5 text-white/50", activeColor: "bg-white/15 text-white/80", count: wordTimestamps.length },
-          { key: "fillers" as const, label: "Filler Words", color: "bg-orange-500/10 text-orange-300/50", activeColor: "bg-orange-500/20 text-orange-300", count: fillerCount },
-          { key: "volume-drops" as const, label: "Quiet Moments", color: "bg-red-500/10 text-red-300/50", activeColor: "bg-red-500/20 text-red-300", count: quietCount },
-          { key: "monotone" as const, label: "Monotone", color: "bg-gray-500/10 text-gray-300/50", activeColor: "bg-gray-500/20 text-gray-300", count: monotoneCount },
-        ]).map((f) => (
-          <button
-            key={f.key}
-            onClick={() => onFilterChange(f.key)}
-            className={`text-caption px-2 py-1 rounded-full transition-colors flex items-center gap-1.5 ${
-              filter === f.key ? f.activeColor : f.color
-            }`}
-          >
-            {f.label}
-            {f.count > 0 && f.key !== "all" && (
-              <span className="bg-black/30 px-1.5 rounded-full text-caption font-medium">{f.count}</span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Transcript body — unified view with user words + audience messages */}
-      <div
-        ref={scrollRef}
-        className="max-h-[400px] overflow-y-auto scroll-touch rounded-lg bg-surface-raised border border-white/5 p-4 leading-relaxed"
-      >
-        {/* Build a unified timeline: user words interspersed with audience chat messages */}
-        {(() => {
-          // Find where each chat message should be inserted (by time)
-          const audienceInsertPoints = new Map<number, ChatMessage[]>(); // wordIndex → messages to insert before it
-          const trailingMessages: ChatMessage[] = [];
-          const nonUserMessages = chatMessages.filter((m) => m.from !== "You");
-
-          nonUserMessages.forEach((msg) => {
-            // Find the first word that comes after this message's time
-            const insertIdx = wordTimestamps.findIndex((w) => w.start > msg.time);
-            if (insertIdx >= 0) {
-              const existing = audienceInsertPoints.get(insertIdx) || [];
-              existing.push(msg);
-              audienceInsertPoints.set(insertIdx, existing);
-            } else {
-              trailingMessages.push(msg);
-            }
-          });
-
-          const elements: React.ReactNode[] = [];
-
-          wordTimestamps.forEach((w, idx) => {
-            // Insert audience messages that fall before this word
-            const msgsHere = audienceInsertPoints.get(idx);
-            if (msgsHere) {
-              msgsHere.forEach((msg, mi) => {
-                elements.push(
-                  <span
-                    key={`chat-${idx}-${mi}`}
-                    onClick={() => onSeek(Math.max(0, msg.time - 0.5))}
-                    className="inline-flex items-baseline gap-1 mx-1 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 cursor-pointer hover:bg-amber-500/15 transition-colors align-baseline"
-                  >
-                    <span className="text-amber-400 font-medium text-caption">{msg.from}</span>
-                    <span className="text-white/40 text-caption font-mono">{formatTimeCompact(msg.time)}</span>
-                  </span>
-                );
-              });
-            }
-
-            const isCurrent = currentTime >= w.start && currentTime <= w.end + 0.3;
-            const isWaveformHovered = waveformHoverTime !== null && waveformHoverTime >= w.start && waveformHoverTime <= w.end + 0.3;
-            const tags = wordAnnotations.get(idx);
-            const isFiller = tags?.has("filler");
-            const isQuiet = tags?.has("quiet");
-            const isMonotone = tags?.has("monotone");
-            const isFiltered = filter !== "all" && shouldHighlight(idx);
-
-            let cls = "cursor-pointer rounded px-0.5 transition-all duration-150 ";
-            if (isWaveformHovered) {
-              cls += "bg-indigo-500/30 text-white ring-1 ring-indigo-400/50 font-medium ";
-            } else if (isCurrent) {
-              cls += "bg-blue-500/30 text-white font-medium ";
-            } else if (isFiltered || (filter === "all" && isFiller)) {
-              if (isFiller) cls += "bg-orange-500/20 text-orange-300 underline decoration-orange-400/40 decoration-wavy ";
-              else if (isQuiet) cls += "bg-red-500/15 text-red-300/80 ";
-              else if (isMonotone) cls += "bg-gray-500/15 text-gray-400 ";
-            } else if (filter !== "all" && !isFiltered) {
-              cls += "text-white/25 ";
-            }
-            cls += "hover:bg-white/10 ";
-
-            elements.push(
-              <span
-                key={`w-${idx}`}
-                onClick={() => onSeek(Math.max(0, w.start - 0.5))}
-                onMouseEnter={() => onHoverWord(w.start, w.end)}
-                onMouseLeave={onHoverLeave}
-                className={cls}
-                title={[
-                  formatTimeCompact(w.start),
-                  isFiller ? "Filler word" : "",
-                  isQuiet ? "Low volume" : "",
-                  isMonotone ? "Monotone delivery" : "",
-                ].filter(Boolean).join(" · ")}
-              >
-                {w.word}{" "}
-              </span>
-            );
-          });
-
-          // Trailing audience messages after all words
-          trailingMessages.forEach((msg, i) => {
-            elements.push(
-              <span
-                key={`trail-${i}`}
-                onClick={() => onSeek(Math.max(0, msg.time - 0.5))}
-                className="inline-flex items-baseline gap-1 mx-1 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 cursor-pointer hover:bg-amber-500/15 transition-colors align-baseline"
-              >
-                <span className="text-amber-400 font-medium text-caption">{msg.from}</span>
-                <span className="text-white/40 text-caption font-mono">{formatTimeCompact(msg.time)}</span>
-              </span>
-            );
-          });
-
-          return <div className={`${fontSizeClass} text-white/70 leading-loose`}>{elements}</div>;
-        })()}
-      </div>
-
-      {filter !== "all" && (
-        <p className="text-caption text-white/30 italic">
-          Click any highlighted word to jump to that moment in the recording.
-        </p>
-      )}
-    </div>
-  );
-}
-
-function formatTimeCompact(s: number): string {
-  return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
 }
 
 // Generate events from prosody timeline and speech metrics
