@@ -308,11 +308,15 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
         return;
       }
 
-      // Only fire if no committed text in 3+ seconds (explicit commit stall)
+      // Tier-2 fallback is disabled for ElevenLabs (cumulative partial text
+      // is error-prone). Only allow fallback for Web Speech provider.
+      if (useElSTT) return;
+
+      // Only fire if no committed text in 8+ seconds (explicit commit stall)
       const timeSinceLastCommit = lastCommitTimeRef.current > 0
         ? now - lastCommitTimeRef.current
         : Infinity; // no commits ever → allow fallback
-      if (timeSinceLastCommit < 3000) return;
+      if (timeSinceLastCommit < 8000) return;
 
       const stableMs = now - interimStableSinceRef.current;
       if (interim.length > 0 && stableMs >= 1500) {
@@ -339,7 +343,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
     }, 100); // Poll at 100ms for responsive coalescing
 
     return () => clearInterval(interval);
-  }, [continuousActive, consumeNewText, flushToChat]);
+  }, [continuousActive, consumeNewText, flushToChat, useElSTT]);
 
   // Capture user utterance start from VAD rising edge on the canonical clock.
   const lastVadSpeakingRef = useRef(false);
