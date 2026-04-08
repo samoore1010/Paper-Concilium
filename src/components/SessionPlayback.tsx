@@ -239,8 +239,14 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
       setIsPlaying(false);
     } else {
       audio.playbackRate = playbackSpeed;
-      audio.play();
-      setIsPlaying(true);
+      audio.play().then(() => {
+        setIsPlaying(true);
+      }).catch((err) => {
+        console.error("[Playback] Play failed:", err);
+        // Retry: some browsers need a user-initiated load before play
+        audio.load();
+        audio.play().then(() => setIsPlaying(true)).catch(() => {});
+      });
     }
   }, [isPlaying, playbackSpeed]);
 
