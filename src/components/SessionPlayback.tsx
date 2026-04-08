@@ -231,6 +231,16 @@ export function SessionPlayback({ audioUrl, duration, timeline, events, transcri
     };
   }, []);
 
+  // Reset playback state when a new recording is loaded.
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.pause();
+    audio.currentTime = 0;
+    setCurrentTime(0);
+    setIsPlaying(false);
+  }, [audioUrl]);
+
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
