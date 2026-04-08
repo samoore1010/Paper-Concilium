@@ -153,7 +153,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
   const { metrics: prosodyMetrics, isAnalyzing: isProsodyActive, startAnalysis: startProsody, stopAnalysis: stopProsody, getTimeline } = useProsody();
   const { startRecording, stopRecording, getRecording, mixAudioBlob } = useAudioRecorder();
   const { speak, stop: stopTTS, isSpeaking, availableProviders, activeProvider, setProvider, debugLog } = useTTS({ onAudioBlob: mixAudioBlob });
-  const { start: startVAD, stop: stopVAD, onSilenceThreshold } = useVAD(behavior.silenceThresholdMs);
+  const { isSpeaking: isVadSpeaking, start: startVAD, stop: stopVAD, onSilenceThreshold } = useVAD(behavior.silenceThresholdMs);
 
   // Check if LLM backend is available on mount
   useEffect(() => {
@@ -177,7 +177,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
   const publishedHistoryRef = useRef<string[]>([]);  // all published texts for dedup
   const coalesceBufferRef = useRef("");      // accumulates committed chunks
   const lastCommitTimeRef = useRef(0);       // when last committed chunk arrived
-  const coalesceStartElapsedRef = useRef(0); // elapsed time when first chunk entered buffer
+  const utteranceStartSecRef = useRef<number | null>(null); // measured speech-start timestamp for current user utterance
   const lastInterimSnapshotRef = useRef(""); // tracks interim changes
   const interimStableSinceRef = useRef(0);   // when interim stopped changing
   const charsFlushedRef = useRef(0);         // total chars flushed to chat (sync counter)
@@ -186,6 +186,12 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
 
   const normalizeForDedup = (s: string) =>
     s.trim().toLowerCase().replace(/[.,!?;:'"]+/g, "").replace(/\s+/g, " ");
+
+  // Canonical session clock for all timeline/chat timestamps.
+  const getSessionSeconds = useCallback(() => {
+    if (goLiveTimeRef.current <= 0) return 0;
+    return Math.max(0, Math.floor((Date.now() - goLiveTimeRef.current) / 1000));
+  }, []);
 
   const flushToChat = useCallback((text: string, source: string, speakingTime?: number) => {
     const trimmed = text.trim();
@@ -216,10 +222,10 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
       publishedHistoryRef.current = publishedHistoryRef.current.slice(-20);
     }
 
-    console.log(`[AutoSend] ${source} → chat (t=${speakingTime ?? "live"}): "${trimmed.substring(0, 60)}"`);
+    console.log(`[AutoSend] ${source} → chat (t=${speakingTime ?? getSessionSeconds()}): "${trimmed.substring(0, 60)}"`);
     if (waitingForResponseRef.current) waitingForResponseRef.current = false;
     processUserInputRef.current(trimmed, speakingTime);
-  }, []);
+  }, [getSessionSeconds]);
 
   useEffect(() => {
     if (!continuousActive) return;
@@ -232,6 +238,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
     charsFlushedRef.current = 0;
     publishedHistoryRef.current = [];
     pendingInterimSentRef.current = "";
+    utteranceStartSecRef.current = null;
 
     const interval = setInterval(() => {
       if (sessionEndedRef.current) return;
@@ -241,12 +248,6 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
       // ── Tier 1: Committed text with coalescing window ──
       const committed = consumeNewText();
       if (committed.length > 0) {
-        if (!coalesceBufferRef.current) {
-          // First chunk in this batch — record when it arrived.
-          // Used to estimate when the user started speaking.
-          coalesceStartElapsedRef.current = goLiveTimeRef.current > 0
-            ? Math.floor((now - goLiveTimeRef.current) / 1000) : 0;
-        }
         coalesceBufferRef.current += (coalesceBufferRef.current ? " " : "") + committed;
         lastCommitTimeRef.current = now;
         return; // Wait for coalescing window before sending
@@ -274,14 +275,10 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
           pendingInterimSentRef.current = "";
         }
 
-        // Estimate when the user started speaking: use the time the first
-        // committed chunk arrived, minus estimated speech duration.
-        // This corrects for STT processing latency (committed text arrives
-        // seconds after the user finished speaking).
-        const wordCount = buf.split(/\s+/).length;
-        const estimatedSpeechSec = Math.round(wordCount * 0.4); // ~150 WPM
-        const speakingTime = Math.max(0, coalesceStartElapsedRef.current - estimatedSpeechSec);
-
+        // Use measured utterance start time (captured when speech begins),
+        // not commit-arrival backdating heuristics.
+        const speakingTime = utteranceStartSecRef.current ?? getSessionSeconds();
+        utteranceStartSecRef.current = null;
         flushToChat(buf, "committed", speakingTime);
         charsFlushedRef.current += buf.length;
         // Don't clear flushedInterimRef here — if Tier 2 sent the interim,
@@ -309,11 +306,15 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
         return;
       }
 
-      // Only fire if no committed text in 5+ seconds (ElevenLabs not committing)
+      // Tier-2 fallback is disabled for ElevenLabs (cumulative partial text
+      // is error-prone). Only allow fallback for Web Speech provider.
+      if (useElSTT) return;
+
+      // Only fire if no committed text in 8+ seconds (explicit commit stall)
       const timeSinceLastCommit = lastCommitTimeRef.current > 0
         ? now - lastCommitTimeRef.current
         : Infinity; // no commits ever → allow fallback
-      if (timeSinceLastCommit < 5000) return;
+      if (timeSinceLastCommit < 8000) return;
 
       const stableMs = now - interimStableSinceRef.current;
       if (interim.length > 0 && stableMs >= 3000) {
@@ -340,7 +341,21 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
     }, 100); // Poll at 100ms for responsive coalescing
 
     return () => clearInterval(interval);
-  }, [continuousActive, consumeNewText, flushToChat]);
+  }, [continuousActive, consumeNewText, flushToChat, useElSTT]);
+
+  // Capture user utterance start from VAD rising edge on the canonical clock.
+  const lastVadSpeakingRef = useRef(false);
+  useEffect(() => {
+    if (!continuousActive) {
+      lastVadSpeakingRef.current = false;
+      utteranceStartSecRef.current = null;
+      return;
+    }
+    if (isVadSpeaking && !lastVadSpeakingRef.current) {
+      utteranceStartSecRef.current = getSessionSeconds();
+    }
+    lastVadSpeakingRef.current = isVadSpeaking;
+  }, [continuousActive, isVadSpeaking, getSessionSeconds]);
 
   const startContinuousMode = useCallback(async () => {
     setContinuousActive(true);
@@ -445,7 +460,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
 
     const persona = personas.find((p) => p.id === next.personaId);
     if (persona) {
-      setChatMessages((prev) => [...prev, { from: persona.name, text: next.text, time: elapsed }]);
+      setChatMessages((prev) => [...prev, { from: persona.name, text: next.text, time: getSessionSeconds() }]);
       setSpeakingPersonaId(next.personaId);
       setPersonaStates((prev) => ({
         ...prev,
@@ -456,7 +471,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
     } else {
       isProcessingInterruptRef.current = false;
     }
-  }, [personas, elapsed, speak, scheduleNextInterrupt]);
+  }, [personas, speak, scheduleNextInterrupt, getSessionSeconds]);
 
   // Keep ref in sync so timers always call latest version
   processInterruptRef.current = processNextInterrupt;
@@ -524,12 +539,10 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
   // This avoids tying the effect to continuousActive (which could cause re-renders).
   useEffect(() => {
     timerRef.current = setInterval(() => {
-      if (goLiveTimeRef.current > 0) {
-        setElapsed(Math.floor((Date.now() - goLiveTimeRef.current) / 1000));
-      }
+      if (goLiveTimeRef.current > 0) setElapsed(getSessionSeconds());
     }, 1000);
     return () => clearInterval(timerRef.current);
-  }, []);
+  }, [getSessionSeconds]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -554,10 +567,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
     if (!text.trim() || sessionEndedRef.current) return;
     wordCountRef.current += text.trim().split(/\s+/).length;
     setTranscript((prev) => [...prev, text.trim()]);
-    // Use estimated speaking start time if provided, otherwise fall back to elapsed.
-    // This corrects for STT processing latency — committed text arrives seconds
-    // after the user actually spoke.
-    const messageTime = speakingTime ?? elapsed;
+    const messageTime = speakingTime ?? getSessionSeconds();
     setChatMessages((prev) => [...prev, { from: "You", text: text.trim(), time: messageTime }]);
     updateMetrics(text.trim());
 
@@ -719,7 +729,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
       // === KEYWORD FALLBACK ===
       fallbackKeywordReactions(text, newMC);
     }
-  }, [personas, elapsed, messageCount, personaStates, updateMetrics, llmAvailable, sessionType, transcript, chatMessages, processNextInterrupt, scheduleNextInterrupt, reactionModel, addDiagnostic]);
+  }, [personas, messageCount, personaStates, updateMetrics, llmAvailable, sessionType, transcript, chatMessages, processNextInterrupt, scheduleNextInterrupt, reactionModel, addDiagnostic, getSessionSeconds]);
 
   // Keep processUserInput ref in sync so callbacks always use the latest version
   processUserInputRef.current = processUserInput;
@@ -788,14 +798,14 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
     const persona = personas.find((p) => p.id === q.personaId);
     setSpeakingPersonaId(q.personaId);
     setPersonaStates((prev) => ({ ...prev, [q.personaId]: { ...prev[q.personaId], reaction: "speaking" } }));
-    if (persona) setChatMessages((prev) => [...prev, { from: persona.name, text: q.question, time: elapsed }]);
+    if (persona) setChatMessages((prev) => [...prev, { from: persona.name, text: q.question, time: getSessionSeconds() }]);
     speak(q.question, q.personaId, getVoiceConfig(q.personaId));
     setQuestionQueue((prev) => prev.filter((x) => x.id !== q.id));
   };
 
   const handleReadQuestion = (q: QueuedQuestion) => {
     const persona = personas.find((p) => p.id === q.personaId);
-    if (persona) setChatMessages((prev) => [...prev, { from: persona.name, text: q.question, time: elapsed }]);
+    if (persona) setChatMessages((prev) => [...prev, { from: persona.name, text: q.question, time: getSessionSeconds() }]);
     setQuestionQueue((prev) => prev.filter((x) => x.id !== q.id));
   };
 
