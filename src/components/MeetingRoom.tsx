@@ -62,6 +62,8 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
   const [sideTab, setSideTab] = useState<SideTab>("chat");
   const [mobilePanel, setMobilePanel] = useState<SideTab | null>(null);
   const [showDebug, setShowDebug] = useState(false);
+  const recordingClockStartRef = useRef(0); // canonical time-zero for playback-synced chat/events
+  const prosodyClockStartRef = useRef(0);   // wall-clock when prosody analysis started
   const [llmAvailable, setLlmAvailable] = useState(false);
   const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 768);
   const [isEnding, setIsEnding] = useState(false);
@@ -189,8 +191,8 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
 
   // Canonical session clock for all timeline/chat timestamps.
   const getSessionSeconds = useCallback(() => {
-    if (goLiveTimeRef.current <= 0) return 0;
-    return Math.max(0, Math.floor((Date.now() - goLiveTimeRef.current) / 1000));
+    if (recordingClockStartRef.current <= 0) return 0;
+    return Math.max(0, Math.floor((Date.now() - recordingClockStartRef.current) / 1000));
   }, []);
 
   const flushToChat = useCallback((text: string, source: string, speakingTime?: number) => {
@@ -317,7 +319,7 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
       if (timeSinceLastCommit < 8000) return;
 
       const stableMs = now - interimStableSinceRef.current;
-      if (interim.length > 0 && stableMs >= 3000) {
+      if (interim.length > 0 && stableMs >= 1500) {
         // ElevenLabs partial transcripts can be cumulative (contain the full
         // session text including already-committed portions). Strip the
         // committed prefix before sending.
@@ -360,6 +362,8 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
   const startContinuousMode = useCallback(async () => {
     setContinuousActive(true);
     goLiveTimeRef.current = Date.now();
+    recordingClockStartRef.current = 0;
+    prosodyClockStartRef.current = 0;
     setElapsed(0);
     // IMPORTANT: Start ElevenLabs STT FIRST — it opens its own mic stream and
     // AudioWorklet pipeline. Opening other mic streams before it can interfere.
@@ -378,8 +382,20 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
     }
 
     try { await startVAD(sharedStream || undefined); } catch (e) { console.log("[Continuous] VAD unavailable"); }
-    try { await startProsody(sharedStream || undefined); } catch (e) { console.log("[Continuous] Prosody unavailable"); }
-    try { await startRecording(sharedStream || undefined); } catch (e) { console.log("[Continuous] Recording unavailable"); }
+    try {
+      prosodyClockStartRef.current = Date.now();
+      await startProsody(sharedStream || undefined);
+    } catch (e) {
+      console.log("[Continuous] Prosody unavailable");
+      prosodyClockStartRef.current = 0;
+    }
+    try {
+      await startRecording(sharedStream || undefined);
+      recordingClockStartRef.current = Date.now();
+    } catch (e) {
+      console.log("[Continuous] Recording unavailable");
+      recordingClockStartRef.current = goLiveTimeRef.current;
+    }
     // Start visual analysis if camera is active
     if (videoElRef.current) {
       try { await visualAnalysis.start(videoElRef.current); } catch (e) { console.log("[Continuous] Visual analysis unavailable"); }
@@ -399,6 +415,8 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
     coalesceBufferRef.current = "";
 
     setContinuousActive(false);
+    recordingClockStartRef.current = 0;
+    prosodyClockStartRef.current = 0;
     stopListening();
     stopProsody();
     stopVAD();
@@ -938,7 +956,15 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
       transcript: ft,
     });
     // Collect recording data (use awaited result, not getRecording)
-    const timeline = getTimeline();
+    const timelineRaw = getTimeline();
+    // Align prosody timeline to recording time-zero (playback clock).
+    // Prosody starts before recording, so shift left by the start delta.
+    const startDeltaSec = recordingClockStartRef.current > 0 && prosodyClockStartRef.current > 0
+      ? (recordingClockStartRef.current - prosodyClockStartRef.current) / 1000
+      : 0;
+    const timeline = timelineRaw
+      .map((f) => ({ ...f, time: Math.max(0, Math.round((f.time - startDeltaSec) * 10) / 10) }))
+      .filter((f) => f.time <= (recordingResult.duration || elapsed) + 1);
     const sessionDuration = recordingResult.duration || elapsed;
     const recordingData: SessionRecordingData | undefined = recordingResult.url ? {
       audioUrl: recordingResult.url,
@@ -948,6 +974,8 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
     } : undefined;
 
     onEndSession(feedback, ft, recordingData);
+    recordingClockStartRef.current = 0;
+    prosodyClockStartRef.current = 0;
   };
 
   const fmt = (s: number) => `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
