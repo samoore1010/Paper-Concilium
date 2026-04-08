@@ -216,10 +216,10 @@ export function MeetingRoom({ personas, sessionType, scriptConfig, onEndSession,
       publishedHistoryRef.current = publishedHistoryRef.current.slice(-20);
     }
 
-    console.log(`[AutoSend] ${source} → chat (t=${speakingTime ?? elapsed}): "${trimmed.substring(0, 60)}"`);
+    console.log(`[AutoSend] ${source} → chat (t=${speakingTime ?? "live"}): "${trimmed.substring(0, 60)}"`);
     if (waitingForResponseRef.current) waitingForResponseRef.current = false;
     processUserInputRef.current(trimmed, speakingTime);
-  }, [elapsed]);
+  }, []);
 
   useEffect(() => {
     if (!continuousActive) return;
